@@ -24,16 +24,23 @@ npm install
 
 ## 2) Create a `.env` file
 
-Create a `.env` file in the project root with:
+Copy the template and fill in your key:
 
 ```bash
-GEMINI_API_KEY=your_key_here
+cp .env.example .env
+```
+
+`.env.example` contains:
+
+```bash
+GEMINI_API_KEY=
 ```
 
 Notes:
 
 - `GOOGLE_API_KEY` also works if you prefer that name.
 - `GEMINI_API_KEY` is the preferred variable.
+- The default model fallback is `gemini-3.1-pro-preview` unless you override it.
 
 ## 3) Verify your API key is detected
 
