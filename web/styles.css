@@ -633,7 +633,13 @@ kbd {
   flex: 1 1 260px;
 }
 
-.discord-export-control .select-input {
+.discord-export-config-control {
+  min-width: 150px;
+  flex: 0 1 170px;
+}
+
+.discord-export-control .select-input,
+.discord-export-config-control .select-input {
   min-width: 0;
   width: 100%;
 }
@@ -966,7 +972,8 @@ kbd {
 
   .cut-controls .inline-control,
   .cut-ratio-control,
-  .discord-export-control {
+  .discord-export-control,
+  .discord-export-config-control {
     min-width: 0;
     width: 100%;
   }

@@ -13,6 +13,7 @@ const {
 } = require("./lib/gemini");
 const { preprocessSvg } = require("./lib/preprocess");
 const {
+  DISCORD_EXPORT_CONFIG_PRESET_LIST,
   DISCORD_EXPORT_PRESET_LIST,
   DiscordExportError,
   exportDiscordAsset,
@@ -839,6 +840,7 @@ async function handlePolishTemplateConfig(response) {
 
 async function handleDiscordExportPresets(response) {
   json(response, 200, {
+    configPresets: DISCORD_EXPORT_CONFIG_PRESET_LIST,
     presets: DISCORD_EXPORT_PRESET_LIST,
   });
 }
@@ -846,6 +848,7 @@ async function handleDiscordExportPresets(response) {
 async function handleDiscordExport(request, response) {
   const body = await parseBody(request);
   const presetId = typeof body.presetId === "string" ? body.presetId.trim() : "";
+  const configPresetId = typeof body.configPresetId === "string" ? body.configPresetId.trim() : "";
   const svg = typeof body.svg === "string" ? body.svg : "";
   const sourceName = typeof body.sourceName === "string" ? body.sourceName : "discord-export.svg";
 
@@ -858,6 +861,7 @@ async function handleDiscordExport(request, response) {
     const result = await exportDiscordAsset({
       svg,
       presetId,
+      configPresetId,
       sourceName,
     });
     const { buffer, ...outputWithoutBuffer } = result.output;

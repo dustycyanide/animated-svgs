@@ -14,11 +14,12 @@ Since the last README edit (`53bbc98`, 2026-02-19), the web workbench added cust
 
 Since this edit (`2026-02-20`), the workbench also added Discord export presets:
 
-- New preview actions: `Discord Export` preset selector + `Export for Discord`
+- New preview actions: `Discord Export` target selector, `Preset` selector (`Quality` / `Fast`), and `Export for Discord`
 - New API routes:
   - `GET /api/discord-export/presets`
   - `POST /api/discord-export`
 - Presets for animated attachment WebP, emoji GIF/WebP, and sticker APNG
+- Config presets for export speed/quality tuning (`quality`, `fast`)
 
 Since this edit (`2026-02-20`), the workbench also added direct SVG paste import:
 
@@ -80,7 +81,7 @@ Routes:
 
 Discord export:
 
-- In `/generate`, open the preview panel and use `Discord Export` + `Export for Discord` to download a Discord-ready animated file.
+- In `/generate`, open the preview panel and choose both `Discord Export` target and `Preset` (`Quality` or `Fast`), then click `Export to Discord`.
 
 Generation modes in the workbench:
 
@@ -99,6 +100,8 @@ Preview export actions:
 
 - Copy raw SVG source
 - Export to Discord-compatible animated file presets
+  - `quality` (higher fidelity, slower)
+  - `fast` (faster export, lower frame budget)
   - `attachment-webp` (chat upload target)
   - `emoji-webp`, `emoji-gif` (server emoji target)
   - `sticker-apng` (server sticker target)

@@ -2,7 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  DISCORD_EXPORT_CONFIG_PRESET_LIST,
   DISCORD_EXPORT_PRESET_LIST,
+  getDiscordExportConfigPreset,
   getDiscordExportPreset,
   parseSvgDimensions,
 } = require("../src/lib/discord-export");
@@ -19,6 +21,19 @@ test("Discord export presets expose expected targets", () => {
 test("Discord export preset defaults to attachment-webp", () => {
   const preset = getDiscordExportPreset("");
   assert.equal(preset.id, "attachment-webp");
+});
+
+test("Discord export config presets expose fast and quality options", () => {
+  const ids = DISCORD_EXPORT_CONFIG_PRESET_LIST.map((preset) => preset.id).sort();
+  assert.deepEqual(ids, ["fast", "quality"]);
+
+  const fast = getDiscordExportConfigPreset("fast");
+  assert.equal(fast.id, "fast");
+});
+
+test("Discord export config preset defaults to quality", () => {
+  const preset = getDiscordExportConfigPreset("");
+  assert.equal(preset.id, "quality");
 });
 
 test("parseSvgDimensions reads width and height attributes", () => {

@@ -33,6 +33,7 @@ const viewerStageEl = viewerEl ? viewerEl.parentElement : null;
 const copySvgButton = document.getElementById("copy-svg-btn");
 const copySvgFeedbackEl = document.getElementById("copy-svg-feedback");
 const discordExportPresetSelect = document.getElementById("discord-export-preset");
+const discordExportConfigPresetSelect = document.getElementById("discord-export-config-preset");
 const discordExportButton = document.getElementById("discord-export-btn");
 const discordExportFeedbackEl = document.getElementById("discord-export-feedback");
 const modelDetailsEl = document.getElementById("model-details");
@@ -90,6 +91,7 @@ let parallelResultItems = [];
 let carouselItems = [];
 let carouselIndex = null;
 let discordExportPresets = [];
+let discordExportConfigPresets = [];
 
 let isLoading = false;
 let isLibraryLoading = false;
@@ -345,8 +347,15 @@ function refreshControlStates() {
   if (discordExportPresetSelect) {
     discordExportPresetSelect.disabled = isLoading || discordExportPresets.length === 0;
   }
+  if (discordExportConfigPresetSelect) {
+    discordExportConfigPresetSelect.disabled = isLoading || discordExportConfigPresets.length === 0;
+  }
   if (discordExportButton) {
-    discordExportButton.disabled = isLoading || !hasCurrentSvg || discordExportPresets.length === 0;
+    discordExportButton.disabled =
+      isLoading ||
+      !hasCurrentSvg ||
+      discordExportPresets.length === 0 ||
+      discordExportConfigPresets.length === 0;
   }
   useCurrentButton.disabled = isLoading || !hasCurrentPrompt;
   polishButton.disabled = isLoading || !hasCustomPrompt || !isCustomMode;
@@ -517,6 +526,13 @@ function getDefaultDiscordExportPresets() {
   ];
 }
 
+function getDefaultDiscordExportConfigPresets() {
+  return [
+    { id: "quality", label: "Quality" },
+    { id: "fast", label: "Fast" },
+  ];
+}
+
 function renderDiscordExportPresetOptions() {
   if (!discordExportPresetSelect) {
     return;
@@ -531,18 +547,38 @@ function renderDiscordExportPresetOptions() {
   }
 }
 
+function renderDiscordExportConfigPresetOptions() {
+  if (!discordExportConfigPresetSelect) {
+    return;
+  }
+
+  discordExportConfigPresetSelect.innerHTML = "";
+  for (const preset of discordExportConfigPresets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    discordExportConfigPresetSelect.appendChild(option);
+  }
+}
+
 async function loadDiscordExportPresets() {
   const fallbackPresets = getDefaultDiscordExportPresets();
+  const fallbackConfigPresets = getDefaultDiscordExportConfigPresets();
 
   try {
     const payload = await fetchJson("/api/discord-export/presets");
     const serverPresets = Array.isArray(payload?.presets) ? payload.presets : [];
+    const serverConfigPresets = Array.isArray(payload?.configPresets) ? payload.configPresets : [];
     discordExportPresets = serverPresets.length > 0 ? serverPresets : fallbackPresets;
+    discordExportConfigPresets =
+      serverConfigPresets.length > 0 ? serverConfigPresets : fallbackConfigPresets;
   } catch {
     discordExportPresets = fallbackPresets;
+    discordExportConfigPresets = fallbackConfigPresets;
   }
 
   renderDiscordExportPresetOptions();
+  renderDiscordExportConfigPresetOptions();
   refreshControlStates();
 }
 
@@ -550,6 +586,14 @@ function getSelectedDiscordExportPresetId() {
   const selectedId = String(discordExportPresetSelect?.value || "").trim();
   if (!selectedId) {
     return "attachment-webp";
+  }
+  return selectedId;
+}
+
+function getSelectedDiscordExportConfigPresetId() {
+  const selectedId = String(discordExportConfigPresetSelect?.value || "").trim();
+  if (!selectedId) {
+    return "quality";
   }
   return selectedId;
 }
@@ -1551,11 +1595,13 @@ async function exportCurrentSvgForDiscord() {
     setDiscordExportFeedback(`exporting to Discord... ${DISCORD_EXPORT_TIME_HINT.toLowerCase()}`);
     setStatus(`Exporting to Discord... ${DISCORD_EXPORT_TIME_HINT}`, { isLoadingState: true });
     const presetId = getSelectedDiscordExportPresetId();
+    const configPresetId = getSelectedDiscordExportConfigPresetId();
     const payload = await fetchJson("/api/discord-export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         presetId,
+        configPresetId,
         sourceName: currentAssetName || "animated-svg.svg",
         svg: currentSvgText,
       }),
@@ -1631,6 +1677,16 @@ if (copySvgButton) {
 }
 if (discordExportButton) {
   discordExportButton.addEventListener("click", exportCurrentSvgForDiscord);
+}
+if (discordExportPresetSelect) {
+  discordExportPresetSelect.addEventListener("change", () => {
+    setDiscordExportFeedback("");
+  });
+}
+if (discordExportConfigPresetSelect) {
+  discordExportConfigPresetSelect.addEventListener("change", () => {
+    setDiscordExportFeedback("");
+  });
 }
 polishButton.addEventListener("click", polishPrompt);
 generateCustomButton.addEventListener("click", generateCustom);

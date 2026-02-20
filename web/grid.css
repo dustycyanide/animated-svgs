@@ -126,6 +126,10 @@ h1 {
   min-width: 250px;
 }
 
+.discord-export-config-control {
+  min-width: 140px;
+}
+
 .btn {
   appearance: none;
   border-radius: 10px;

@@ -14,12 +14,18 @@ const DISCORD_EXPORT_PRESETS = Object.freeze({
     target: "source-fit",
     maxDimension: 1024,
     minimumDimension: 96,
-    attempts: [
-      { fps: 24, durationSeconds: 5, quality: 82, scale: 1 },
-      { fps: 20, durationSeconds: 4, quality: 74, scale: 0.88 },
-      { fps: 16, durationSeconds: 3.5, quality: 66, scale: 0.78 },
-      { fps: 12, durationSeconds: 2.5, quality: 56, scale: 0.68 },
-    ],
+    attemptsByConfig: {
+      quality: [
+        { fps: 24, durationSeconds: 5, quality: 82, scale: 1 },
+        { fps: 20, durationSeconds: 4, quality: 74, scale: 0.88 },
+        { fps: 16, durationSeconds: 3.5, quality: 66, scale: 0.78 },
+        { fps: 12, durationSeconds: 2.5, quality: 56, scale: 0.68 },
+      ],
+      fast: [
+        { fps: 14, durationSeconds: 2.4, quality: 68, scale: 0.76 },
+        { fps: 10, durationSeconds: 1.8, quality: 58, scale: 0.64 },
+      ],
+    },
   },
   "emoji-webp": {
     id: "emoji-webp",
@@ -30,12 +36,18 @@ const DISCORD_EXPORT_PRESETS = Object.freeze({
     sizeLimitBytes: 256 * 1024,
     target: "fixed-square",
     size: 128,
-    attempts: [
-      { fps: 20, durationSeconds: 3, quality: 82 },
-      { fps: 16, durationSeconds: 2.5, quality: 72 },
-      { fps: 12, durationSeconds: 2, quality: 62 },
-      { fps: 10, durationSeconds: 1.6, quality: 54 },
-    ],
+    attemptsByConfig: {
+      quality: [
+        { fps: 20, durationSeconds: 3, quality: 82 },
+        { fps: 16, durationSeconds: 2.5, quality: 72 },
+        { fps: 12, durationSeconds: 2, quality: 62 },
+        { fps: 10, durationSeconds: 1.6, quality: 54 },
+      ],
+      fast: [
+        { fps: 12, durationSeconds: 2, quality: 70 },
+        { fps: 10, durationSeconds: 1.6, quality: 60 },
+      ],
+    },
   },
   "emoji-gif": {
     id: "emoji-gif",
@@ -46,12 +58,18 @@ const DISCORD_EXPORT_PRESETS = Object.freeze({
     sizeLimitBytes: 256 * 1024,
     target: "fixed-square",
     size: 128,
-    attempts: [
-      { fps: 16, durationSeconds: 3 },
-      { fps: 12, durationSeconds: 2.4 },
-      { fps: 10, durationSeconds: 2 },
-      { fps: 8, durationSeconds: 1.6 },
-    ],
+    attemptsByConfig: {
+      quality: [
+        { fps: 16, durationSeconds: 3 },
+        { fps: 12, durationSeconds: 2.4 },
+        { fps: 10, durationSeconds: 2 },
+        { fps: 8, durationSeconds: 1.6 },
+      ],
+      fast: [
+        { fps: 10, durationSeconds: 2 },
+        { fps: 8, durationSeconds: 1.6 },
+      ],
+    },
   },
   "sticker-apng": {
     id: "sticker-apng",
@@ -62,12 +80,31 @@ const DISCORD_EXPORT_PRESETS = Object.freeze({
     sizeLimitBytes: 512 * 1024,
     target: "fixed-square",
     size: 320,
-    attempts: [
-      { fps: 20, durationSeconds: 3 },
-      { fps: 16, durationSeconds: 2.5 },
-      { fps: 12, durationSeconds: 2.1 },
-      { fps: 10, durationSeconds: 1.6 },
-    ],
+    attemptsByConfig: {
+      quality: [
+        { fps: 20, durationSeconds: 3 },
+        { fps: 16, durationSeconds: 2.5 },
+        { fps: 12, durationSeconds: 2.1 },
+        { fps: 10, durationSeconds: 1.6 },
+      ],
+      fast: [
+        { fps: 12, durationSeconds: 2.2 },
+        { fps: 10, durationSeconds: 1.8 },
+      ],
+    },
+  },
+});
+
+const DISCORD_EXPORT_CONFIG_PRESETS = Object.freeze({
+  quality: {
+    id: "quality",
+    label: "Quality",
+    description: "Higher frame rate and duration. Slower export.",
+  },
+  fast: {
+    id: "fast",
+    label: "Fast",
+    description: "Lower frame count and shorter duration. Faster export.",
   },
 });
 
@@ -78,6 +115,12 @@ const DISCORD_EXPORT_PRESET_LIST = Object.values(DISCORD_EXPORT_PRESETS).map((pr
   mimeType: preset.mimeType,
   extension: preset.extension,
   sizeLimitBytes: preset.sizeLimitBytes,
+}));
+
+const DISCORD_EXPORT_CONFIG_PRESET_LIST = Object.values(DISCORD_EXPORT_CONFIG_PRESETS).map((preset) => ({
+  id: preset.id,
+  label: preset.label,
+  description: preset.description,
 }));
 
 const PNG_FRAME_PATTERN = "frame-%05d.png";
@@ -95,6 +138,15 @@ function getDiscordExportPreset(presetId) {
   const preset = DISCORD_EXPORT_PRESETS[normalizedId];
   if (!preset) {
     throw new DiscordExportError("Unsupported Discord export preset.", 400);
+  }
+  return preset;
+}
+
+function getDiscordExportConfigPreset(configPresetId) {
+  const normalizedId = String(configPresetId || "quality").trim().toLowerCase();
+  const preset = DISCORD_EXPORT_CONFIG_PRESETS[normalizedId];
+  if (!preset) {
+    throw new DiscordExportError("Unsupported Discord export configuration preset.", 400);
   }
   return preset;
 }
@@ -497,6 +549,26 @@ function resolveEncoderArgs({ preset, framesDir, outputPath, fps, width, height,
   return buildApngArgs({ framesDir, outputPath, fps, width, height });
 }
 
+function resolveExportAttemptsForConfig(preset, configPreset) {
+  const attemptsByConfig = preset && typeof preset.attemptsByConfig === "object"
+    ? preset.attemptsByConfig
+    : null;
+
+  if (attemptsByConfig && Array.isArray(attemptsByConfig[configPreset.id]) && attemptsByConfig[configPreset.id].length > 0) {
+    return attemptsByConfig[configPreset.id];
+  }
+
+  if (attemptsByConfig && Array.isArray(attemptsByConfig.quality) && attemptsByConfig.quality.length > 0) {
+    return attemptsByConfig.quality;
+  }
+
+  if (Array.isArray(preset?.attempts) && preset.attempts.length > 0) {
+    return preset.attempts;
+  }
+
+  return [{ fps: 16, durationSeconds: 2 }];
+}
+
 function buildPresetSummary(preset) {
   return {
     id: preset.id,
@@ -508,13 +580,27 @@ function buildPresetSummary(preset) {
   };
 }
 
-async function exportDiscordAsset({ svg, presetId, sourceName = "discord-export.svg" }) {
+function buildConfigPresetSummary(preset) {
+  return {
+    id: preset.id,
+    label: preset.label,
+    description: preset.description,
+  };
+}
+
+async function exportDiscordAsset({
+  svg,
+  presetId,
+  configPresetId,
+  sourceName = "discord-export.svg",
+}) {
   const svgText = typeof svg === "string" ? svg.trim() : "";
   if (!svgText) {
     throw new DiscordExportError("Missing SVG markup for Discord export.", 400);
   }
 
   const preset = getDiscordExportPreset(presetId);
+  const configPreset = getDiscordExportConfigPreset(configPresetId);
   await ensureFfmpegAvailable();
 
   const sourceDimensions = parseSvgDimensions(svgText);
@@ -529,9 +615,7 @@ async function exportDiscordAsset({ svg, presetId, sourceName = "discord-export.
     browser = renderer.browser;
     page = renderer.page;
 
-    const attempts = Array.isArray(preset.attempts) && preset.attempts.length > 0
-      ? preset.attempts
-      : [{ fps: 16, durationSeconds: 2 }];
+    const attempts = resolveExportAttemptsForConfig(preset, configPreset);
 
     let bestAttempt = null;
 
@@ -608,6 +692,7 @@ async function exportDiscordAsset({ svg, presetId, sourceName = "discord-export.
 
     return {
       preset: buildPresetSummary(preset),
+      configPreset: buildConfigPresetSummary(configPreset),
       output: {
         fileName,
         bytes: bestAttempt.bytes,
@@ -632,9 +717,11 @@ async function exportDiscordAsset({ svg, presetId, sourceName = "discord-export.
 }
 
 module.exports = {
+  DISCORD_EXPORT_CONFIG_PRESET_LIST,
   DISCORD_EXPORT_PRESET_LIST,
   DiscordExportError,
   exportDiscordAsset,
+  getDiscordExportConfigPreset,
   getDiscordExportPreset,
   parseSvgDimensions,
 };
