@@ -1,8 +1,14 @@
 const nextButton = document.getElementById("next-btn");
 const saveButton = document.getElementById("save-btn");
 const copyButton = document.getElementById("copy-btn");
+const polishButton = document.getElementById("polish-btn");
+const generateCustomButton = document.getElementById("generate-custom-btn");
+const useCurrentButton = document.getElementById("use-current-btn");
+const modelInput = document.getElementById("model-input");
 const refreshLibraryButton = document.getElementById("refresh-library-btn");
 const showHiddenToggle = document.getElementById("show-hidden-toggle");
+const customPromptInput = document.getElementById("custom-prompt-input");
+const customMetaEl = document.getElementById("custom-meta");
 const statusEl = document.getElementById("status");
 const promptEl = document.getElementById("prompt");
 const categoryEl = document.getElementById("category");
@@ -24,25 +30,63 @@ let currentPromptMode = null;
 let currentSvgUrl = null;
 let currentAssetName = null;
 let currentAssetScope = null;
+
+let composePromptMode = "custom";
+const DEFAULT_MODEL = "gemini-3.1-pro-preview";
+
 let libraryScope = "created";
 let libraryItems = [];
 let libraryArchivedCount = 0;
 
-function setStatus(message, { isError = false, isLoading = false } = {}) {
+let isLoading = false;
+let isLibraryLoading = false;
+
+function setStatus(message, { isError = false, isLoadingState = false } = {}) {
   statusEl.textContent = message;
   statusEl.classList.toggle("error", isError);
-  statusEl.classList.toggle("loading", isLoading);
+  statusEl.classList.toggle("loading", isLoadingState);
+}
+
+function getCustomPromptValue() {
+  return String(customPromptInput.value || "").trim();
+}
+
+function setCustomMeta(message = "") {
+  customMetaEl.textContent = message;
+}
+
+function getSelectedModel() {
+  const value = String(modelInput?.value || "").trim();
+  return value || DEFAULT_MODEL;
+}
+
+function refreshControlStates() {
+  const hasCurrentPrompt = Boolean(currentPrompt);
+  const hasCustomPrompt = Boolean(getCustomPromptValue());
+
+  nextButton.disabled = isLoading;
+  saveButton.disabled = isLoading || !hasCurrentPrompt;
+  copyButton.disabled = isLoading || !hasCurrentPrompt;
+  useCurrentButton.disabled = isLoading || !hasCurrentPrompt;
+  polishButton.disabled = isLoading || !hasCustomPrompt;
+  generateCustomButton.disabled = isLoading || !hasCustomPrompt;
+  customPromptInput.disabled = isLoading;
+  if (modelInput) {
+    modelInput.disabled = isLoading;
+  }
+
+  refreshLibraryButton.disabled = isLibraryLoading;
+  showHiddenToggle.disabled = isLibraryLoading;
 }
 
 function setLoading(loading) {
-  nextButton.disabled = loading;
-  saveButton.disabled = loading || !currentPrompt;
-  copyButton.disabled = loading || !currentPrompt;
+  isLoading = loading;
+  refreshControlStates();
 }
 
 function setLibraryLoading(loading) {
-  refreshLibraryButton.disabled = loading;
-  showHiddenToggle.disabled = loading;
+  isLibraryLoading = loading;
+  refreshControlStates();
 }
 
 function renderMeta() {
@@ -150,7 +194,7 @@ function compact(text, max = 70) {
   if (!value) {
     return "";
   }
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+  return value.length > max ? `${value.slice(0, max - 1)}...` : value;
 }
 
 function renderLibraryMeta(payload) {
@@ -176,7 +220,7 @@ function renderLibraryList(payload) {
     empty.className = "library-empty";
     empty.textContent =
       libraryScope === "created"
-        ? "No created SVGs yet. Click Next to generate one."
+        ? "No created SVGs yet. Click Next or Generate Custom."
         : "No hidden SVGs.";
     libraryListEl.appendChild(empty);
     return;
@@ -263,9 +307,31 @@ async function loadLibrary({ preserveSelection = true } = {}) {
   }
 }
 
+function applyGenerationPayload(payload) {
+  currentPrompt = payload.prompt || "";
+  currentCategory = payload.category || "";
+  currentSeed = payload.seed || null;
+  currentPromptIndex = Number.isInteger(payload.promptIndex) ? payload.promptIndex : null;
+  currentPromptCount = Number.isInteger(payload.promptCount) ? payload.promptCount : null;
+  currentPromptMode = payload.promptMode || null;
+  currentAssetName = payload?.savedAsset?.name || null;
+  currentAssetScope = payload?.savedAsset?.scope || null;
+
+  promptEl.textContent = currentPrompt;
+  renderMeta();
+  renderModelMeta(payload);
+  renderModelResponse(payload.rawModelResponse);
+
+  if (payload.svg) {
+    updateSvg(payload.svg);
+  } else {
+    clearSvg("No SVG was returned for this run.");
+  }
+}
+
 async function previewLibraryItem(item) {
   try {
-    setStatus(`Loading ${item.name}...`, { isLoading: true });
+    setStatus(`Loading ${item.name}...`, { isLoadingState: true });
     const payload = await fetchJson(
       `/api/library/item?scope=${item.scope}&name=${encodeURIComponent(item.name)}`,
     );
@@ -284,7 +350,7 @@ async function previewLibraryItem(item) {
     renderMeta();
     renderModelMeta({ model: payload.meta.model });
     renderModelResponse("");
-    setLoading(false);
+    refreshControlStates();
     renderLibraryList({
       scope: libraryScope,
       items: libraryItems,
@@ -298,7 +364,7 @@ async function previewLibraryItem(item) {
 
 async function hideLibraryItem(name) {
   try {
-    setStatus(`Hiding ${name}...`, { isLoading: true });
+    setStatus(`Hiding ${name}...`, { isLoadingState: true });
     const payload = await fetchJson("/api/library/hide", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -318,7 +384,7 @@ async function hideLibraryItem(name) {
 
 async function unhideLibraryItem(name) {
   try {
-    setStatus(`Unhiding ${name}...`, { isLoading: true });
+    setStatus(`Unhiding ${name}...`, { isLoadingState: true });
     const payload = await fetchJson("/api/library/unhide", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -339,38 +405,74 @@ async function unhideLibraryItem(name) {
 async function nextRandom() {
   try {
     setLoading(true);
-    setStatus("Generating...", { isLoading: true });
-
+    setStatus("Generating next preset prompt...", { isLoadingState: true });
     const payload = await fetchJson("/api/next", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify({ model: getSelectedModel() }),
     });
-
-    currentPrompt = payload.prompt || "";
-    currentCategory = payload.category || "";
-    currentSeed = payload.seed || null;
-    currentPromptIndex = Number.isInteger(payload.promptIndex) ? payload.promptIndex : null;
-    currentPromptCount = Number.isInteger(payload.promptCount) ? payload.promptCount : null;
-    currentPromptMode = payload.promptMode || null;
-    currentAssetName = payload?.savedAsset?.name || null;
-    currentAssetScope = payload?.savedAsset?.scope || null;
-
-    promptEl.textContent = currentPrompt;
-    renderMeta();
-    renderModelMeta(payload);
-    renderModelResponse(payload.rawModelResponse);
-
-    if (payload.svg) {
-      updateSvg(payload.svg);
-    } else {
-      clearSvg("No SVG was returned for this run.");
-    }
-
+    applyGenerationPayload(payload);
     await loadLibrary();
-    setStatus(
-      currentAssetName ? `Done. Saved ${currentAssetName}.` : "Done.",
-    );
+    setStatus(currentAssetName ? `Done. Saved ${currentAssetName}.` : "Done.");
+  } catch (error) {
+    setStatus(error.message, { isError: true });
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function generateCustom() {
+  const prompt = getCustomPromptValue();
+  if (!prompt) {
+    setStatus("Enter a custom prompt first.", { isError: true });
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setStatus("Generating from custom prompt...", { isLoadingState: true });
+    const payload = await fetchJson("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        model: getSelectedModel(),
+        category: "custom",
+        promptMode: composePromptMode,
+      }),
+    });
+    applyGenerationPayload(payload);
+    await loadLibrary();
+    setStatus(currentAssetName ? `Done. Saved ${currentAssetName}.` : "Done.");
+  } catch (error) {
+    setStatus(error.message, { isError: true });
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function polishPrompt() {
+  const prompt = getCustomPromptValue();
+  if (!prompt) {
+    setStatus("Enter a prompt to polish first.", { isError: true });
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setStatus("Polishing prompt...", { isLoadingState: true });
+    const payload = await fetchJson("/api/polish-prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        model: getSelectedModel(),
+      }),
+    });
+    customPromptInput.value = payload.prompt || prompt;
+    composePromptMode = "custom-polished";
+    setCustomMeta(`Polished with ${payload.model}.`);
+    setStatus("Prompt polished. Generate custom when ready.");
   } catch (error) {
     setStatus(error.message, { isError: true });
   } finally {
@@ -384,9 +486,8 @@ async function savePrompt() {
   }
 
   try {
-    saveButton.disabled = true;
-    setStatus("Saving prompt...", { isLoading: true });
-
+    setLoading(true);
+    setStatus("Saving prompt...", { isLoadingState: true });
     const payload = await fetchJson("/api/save-prompt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -399,12 +500,11 @@ async function savePrompt() {
         seed: currentSeed,
       }),
     });
-
     setStatus(`Saved to ${payload.file}`);
   } catch (error) {
     setStatus(error.message, { isError: true });
   } finally {
-    saveButton.disabled = !currentPrompt;
+    setLoading(false);
   }
 }
 
@@ -419,6 +519,16 @@ async function copyPrompt() {
   } catch {
     setStatus("Clipboard copy failed.", { isError: true });
   }
+}
+
+function useCurrentPromptInComposer() {
+  if (!currentPrompt) {
+    return;
+  }
+  customPromptInput.value = currentPrompt;
+  composePromptMode = currentPromptMode === "custom-polished" ? "custom-polished" : "custom";
+  setCustomMeta("Loaded current prompt into custom editor.");
+  refreshControlStates();
 }
 
 function isTypingTarget(target) {
@@ -437,8 +547,36 @@ function isTypingTarget(target) {
 nextButton.addEventListener("click", nextRandom);
 saveButton.addEventListener("click", savePrompt);
 copyButton.addEventListener("click", copyPrompt);
+polishButton.addEventListener("click", polishPrompt);
+generateCustomButton.addEventListener("click", generateCustom);
+useCurrentButton.addEventListener("click", useCurrentPromptInComposer);
 refreshLibraryButton.addEventListener("click", () => loadLibrary());
 showHiddenToggle.addEventListener("change", () => loadLibrary({ preserveSelection: false }));
+
+customPromptInput.addEventListener("input", () => {
+  if (composePromptMode !== "custom") {
+    composePromptMode = "custom";
+    setCustomMeta("");
+  }
+  refreshControlStates();
+});
+
+if (modelInput) {
+  modelInput.addEventListener("blur", () => {
+    if (!String(modelInput.value || "").trim()) {
+      modelInput.value = DEFAULT_MODEL;
+    }
+  });
+}
+
+customPromptInput.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    if (!generateCustomButton.disabled) {
+      generateCustom();
+    }
+  }
+});
 
 document.addEventListener("keydown", (event) => {
   if (
@@ -460,4 +598,5 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+refreshControlStates();
 loadLibrary();

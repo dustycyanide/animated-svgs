@@ -2,6 +2,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 
 let loaded = false;
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
 
 function loadEnv() {
   if (loaded) {
@@ -40,8 +41,24 @@ function requireGeminiKey() {
   return key;
 }
 
+function resolveGeminiModel(requestedModel) {
+  loadEnv();
+
+  if (typeof requestedModel === "string" && requestedModel.trim().length > 0) {
+    return requestedModel.trim();
+  }
+
+  if (typeof process.env.GEMINI_MODEL === "string" && process.env.GEMINI_MODEL.trim().length > 0) {
+    return process.env.GEMINI_MODEL.trim();
+  }
+
+  return DEFAULT_GEMINI_MODEL;
+}
+
 module.exports = {
+  DEFAULT_GEMINI_MODEL,
   loadEnv,
   findGeminiKey,
   requireGeminiKey,
+  resolveGeminiModel,
 };

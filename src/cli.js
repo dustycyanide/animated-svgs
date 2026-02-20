@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs/promises");
 const fscore = require("fs");
 const { parseArgs, parseNumber } = require("./lib/utils");
-const { findGeminiKey, loadEnv } = require("./lib/env");
+const { DEFAULT_GEMINI_MODEL, findGeminiKey, loadEnv } = require("./lib/env");
 const { runPipeline, runQaOnly } = require("./lib/pipeline");
 const { runIteration } = require("./lib/iteration");
 const { generateDashboard } = require("./lib/dashboard");
@@ -22,7 +22,7 @@ function printHelp() {
 animated-svgs CLI
 
 Usage:
-  node src/cli.js run --prompt "..." [--model gemini-2.5-flash] [--out-dir runs] [--name demo]
+  node src/cli.js run --prompt "..." [--model ${DEFAULT_GEMINI_MODEL}] [--out-dir runs] [--name demo]
   node src/cli.js run --prompt-file ./prompt.txt [--no-render]
   node src/cli.js run --input-svg ./existing.svg [--name local-pass]
   node src/cli.js qa --input ./file.svg [--out-dir ./qa-out] [--no-render]
@@ -34,7 +34,7 @@ Usage:
 Flags:
   --prompt               Prompt text for generation
   --prompt-file          Path to a prompt file
-  --model                Gemini model name (default: GEMINI_MODEL or gemini-2.5-flash)
+  --model                Gemini model name (default: GEMINI_MODEL or ${DEFAULT_GEMINI_MODEL})
   --width                Target width (default: 1024)
   --height               Target height (default: 1024)
   --temperature          Sampling temperature (default: 0.8)
@@ -89,7 +89,7 @@ async function commandRun(flags) {
   const options = {
     prompt: flagValue(flags, "prompt"),
     promptFile: flagValue(flags, "promptFile"),
-    model: flagValue(flags, "model") || process.env.GEMINI_MODEL,
+    model: flagValue(flags, "model"),
     width: flagValue(flags, "width"),
     height: flagValue(flags, "height"),
     temperature: flagValue(flags, "temperature"),

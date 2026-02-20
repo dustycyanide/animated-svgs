@@ -1,7 +1,7 @@
 const http = require("http");
 const fs = require("fs/promises");
 const path = require("path");
-const { loadEnv, findGeminiKey } = require("./lib/env");
+const { loadEnv, findGeminiKey, resolveGeminiModel, DEFAULT_GEMINI_MODEL } = require("./lib/env");
 const { ensureDir, parseNumber, slugify, timestampId } = require("./lib/utils");
 const { buildMadlibSeed, buildMadlibText } = require("./lib/madlib");
 const { FIXED_WEB_PROMPTS, getNextFixedPrompt } = require("./lib/web-prompts");
@@ -12,7 +12,6 @@ const { optimizeSvg } = require("./lib/postprocess");
 const HOST = "127.0.0.1";
 const PORT = parseNumber(process.env.WEB_PORT, 3000);
 const WEB_PROMPT_MODE = String(process.env.WEB_PROMPT_MODE || "fixed").toLowerCase();
-const WEB_POLISH_MODEL = process.env.WEB_POLISH_MODEL || "gemini-3.1-pro";
 const PUBLIC_DIR = path.resolve(process.cwd(), "web");
 const SAVED_PROMPTS_FILE = path.resolve(process.cwd(), "prompts", "saved-prompts.jsonl");
 const LIBRARY_ROOT = path.resolve(process.cwd(), "results");
@@ -226,6 +225,24 @@ async function parseBody(request) {
   }
 }
 
+function readModelFromBody(body) {
+  if (typeof body?.model === "string" && body.model.trim().length > 0) {
+    return body.model.trim();
+  }
+  return null;
+}
+
+function resolveWebPolishModel(requestedModel) {
+  const fromBody = readModelFromBody({ model: requestedModel });
+  if (fromBody) {
+    return fromBody;
+  }
+  if (typeof process.env.WEB_POLISH_MODEL === "string" && process.env.WEB_POLISH_MODEL.trim().length > 0) {
+    return process.env.WEB_POLISH_MODEL.trim();
+  }
+  return DEFAULT_GEMINI_MODEL;
+}
+
 async function serveStatic(urlPath, response) {
   const cleanPath = urlPath === "/" ? "/index.html" : urlPath;
   const target = path.resolve(PUBLIC_DIR, `.${cleanPath}`);
@@ -252,12 +269,14 @@ async function serveStatic(urlPath, response) {
   }
 }
 
-async function handleNext(response) {
+async function handleNext(request, response) {
+  const body = await parseBody(request);
   let prompt = "";
   let category = null;
   let seed = null;
   let promptIndex = null;
   let promptCount = null;
+  const model = resolveGeminiModel(readModelFromBody(body));
 
   if (WEB_PROMPT_MODE === "madlib") {
     seed = buildMadlibSeed();
@@ -285,7 +304,6 @@ async function handleNext(response) {
     return;
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   if (WEB_PROMPT_MODE === "madlib") {
     const madlibText = buildMadlibText(seed);
     const expanded = await expandMadlibPrompt({
@@ -299,6 +317,7 @@ async function handleNext(response) {
   await generateFromPrompt({
     response,
     apiKey: key.value,
+    model,
     prompt,
     category,
     seed,
@@ -311,6 +330,7 @@ async function handleNext(response) {
 async function generateFromPrompt({
   response,
   apiKey,
+  model,
   prompt,
   category = null,
   seed = null,
@@ -318,7 +338,6 @@ async function generateFromPrompt({
   promptCount = null,
   promptMode = "custom",
 }) {
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const generation = await generateAnimatedSvg({
     apiKey,
     model,
@@ -384,6 +403,7 @@ function readPromptFromBody(body) {
 async function handleGenerate(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
+  const model = resolveGeminiModel(readModelFromBody(body));
   if (!prompt) {
     json(response, 400, { error: "Missing prompt." });
     return;
@@ -404,6 +424,7 @@ async function handleGenerate(request, response) {
   await generateFromPrompt({
     response,
     apiKey: key.value,
+    model,
     prompt,
     category: typeof body.category === "string" ? body.category : "custom",
     promptMode: typeof body.promptMode === "string" ? body.promptMode : "custom",
@@ -413,6 +434,7 @@ async function handleGenerate(request, response) {
 async function handlePolishPrompt(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
+  const model = resolveWebPolishModel(readModelFromBody(body));
   if (!prompt) {
     json(response, 400, { error: "Missing prompt." });
     return;
@@ -430,7 +452,7 @@ async function handlePolishPrompt(request, response) {
 
   const polished = await polishSvgPrompt({
     apiKey: key.value,
-    model: WEB_POLISH_MODEL,
+    model,
     userPrompt: prompt,
     examples: FIXED_WEB_PROMPTS,
   });
@@ -545,7 +567,7 @@ async function route(request, response) {
   const url = new URL(request.url || "/", `http://${HOST}:${PORT}`);
 
   if (request.method === "POST" && url.pathname === "/api/next") {
-    await handleNext(response);
+    await handleNext(request, response);
     return;
   }
 

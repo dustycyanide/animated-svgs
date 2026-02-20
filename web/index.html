@@ -19,7 +19,34 @@
           <button id="save-btn" class="btn btn-secondary" type="button" disabled>Save Prompt</button>
           <button id="copy-btn" class="btn btn-ghost" type="button" disabled>Copy Prompt</button>
         </div>
-        <p class="hint">Tip: press <kbd>N</kbd> to generate the next prompt.</p>
+        <p class="hint">Tip: press <kbd>N</kbd> to generate the next preset prompt.</p>
+      </section>
+
+      <section class="custom-card" aria-label="Custom prompt controls">
+        <h2>Custom Prompt</h2>
+        <div class="model-control">
+          <label for="model-input">Model</label>
+          <input
+            id="model-input"
+            class="model-input"
+            type="text"
+            value="gemini-3.1-pro-preview"
+            spellcheck="false"
+            autocomplete="off"
+          />
+        </div>
+        <textarea
+          id="custom-prompt-input"
+          class="custom-input"
+          placeholder="Type your own prompt, then polish or generate..."
+        ></textarea>
+        <div class="actions">
+          <button id="polish-btn" class="btn btn-secondary" type="button">Polish Prompt</button>
+          <button id="generate-custom-btn" class="btn btn-primary" type="button">Generate Custom</button>
+          <button id="use-current-btn" class="btn btn-ghost" type="button">Use Current Prompt</button>
+        </div>
+        <div id="custom-meta" class="meta-line"></div>
+        <p class="hint">Polish rewrites your prompt using the fixed examples as style references.</p>
       </section>
 
       <div id="status" class="status" role="status" aria-live="polite">Click Next.</div>

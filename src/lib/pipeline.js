@@ -1,6 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { generateAnimatedSvg } = require("./gemini");
+const { resolveGeminiModel } = require("./env");
 const { preprocessSvg } = require("./preprocess");
 const { optimizeSvg } = require("./postprocess");
 const { runQa } = require("./qa");
@@ -28,7 +29,7 @@ async function runPipeline(options) {
 
   const width = parseNumber(options.width, 1024);
   const height = parseNumber(options.height, 1024);
-  const model = String(options.model || "gemini-2.5-flash");
+  const model = resolveGeminiModel(options.model);
   const render = options.render !== false;
   const renderDelayMs = parseNumber(options.renderDelayMs, 1200);
   const motionThreshold = parseNumber(options.motionThreshold, 0.002);
