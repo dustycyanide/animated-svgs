@@ -1,0 +1,18 @@
+Create a high-quality animated SVG of a video game character swinging a sword.
+
+Art direction:
+- Stylized 2D action-game look, readable silhouette, clean linework.
+- Full-body character centered on canvas.
+- Sword slash arc should feel powerful and fluid.
+
+Animation requirements:
+- Seamless loop around 2.0 to 3.0 seconds.
+- Anticipation: slight wind-up before the strike.
+- Action: fast sword swing with a bright slash trail.
+- Recovery: return to idle-ready stance.
+- Add subtle secondary motion (cape/hair/cloth) synced to movement.
+
+Technical constraints:
+- Use only SVG/SMIL or CSS animation (no JavaScript).
+- Keep structure organized with grouped layers.
+- Prefer performance-friendly shapes and transforms.

@@ -1,0 +1,37 @@
+{
+  "name": "local-smoke-lab",
+  "title": "Animated SVG Local Iteration Lab",
+  "outDir": "runs-lab",
+  "base": {
+    "inputSvg": "examples/pulse.svg",
+    "promptFile": "prompts/sword-swing.txt",
+    "width": 512,
+    "height": 512,
+    "render": false
+  },
+  "experiments": [
+    {
+      "id": "baseline",
+      "name": "Baseline (No Render)",
+      "overrides": {}
+    },
+    {
+      "id": "motion-check",
+      "name": "Motion QA Enabled",
+      "overrides": {
+        "render": true,
+        "renderDelayMs": 900,
+        "motionThreshold": 0.003
+      }
+    },
+    {
+      "id": "strict-threshold",
+      "name": "Strict Motion Threshold",
+      "overrides": {
+        "render": true,
+        "renderDelayMs": 1200,
+        "motionThreshold": 0.01
+      }
+    }
+  ]
+}

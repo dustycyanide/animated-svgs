@@ -1,0 +1,38 @@
+{
+  "name": "gemini-style-lab",
+  "title": "Animated SVG Gemini Iteration Lab",
+  "outDir": "runs-gemini-lab",
+  "base": {
+    "promptFile": "prompts/sword-swing.txt",
+    "model": "gemini-2.5-flash",
+    "width": 1024,
+    "height": 1024,
+    "render": false
+  },
+  "experiments": [
+    {
+      "id": "flash-t06",
+      "name": "Flash T=0.6",
+      "overrides": {
+        "temperature": 0.6
+      }
+    },
+    {
+      "id": "flash-t09",
+      "name": "Flash T=0.9",
+      "overrides": {
+        "temperature": 0.9
+      }
+    },
+    {
+      "id": "flash-render",
+      "name": "Flash + Motion Render QA",
+      "overrides": {
+        "temperature": 0.8,
+        "render": true,
+        "renderDelayMs": 1200,
+        "motionThreshold": 0.002
+      }
+    }
+  ]
+}

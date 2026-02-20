@@ -1,0 +1,8 @@
+Design an animated SVG of a neon orbital system on a dark background.
+
+Requirements:
+- Clean geometric style.
+- Smooth looping motion around a center core.
+- 2 to 4 orbiting elements with staggered timing.
+- Add subtle glow via gradients and opacity shifts.
+- Keep it performant and visually balanced.
