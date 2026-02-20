@@ -13,12 +13,14 @@ const GRID_BOOTSTRAP_SCRIPT = `
     });
   };
 
-  if (document.readyState === "complete") {
-    boot();
+  if (window.__animatedSvgsHydrated) {
+    setTimeout(boot, 0);
     return;
   }
 
-  window.addEventListener("load", boot, { once: true });
+  window.addEventListener("animated-svgs:hydrated", () => {
+    setTimeout(boot, 0);
+  }, { once: true });
 })();
 `;
 

@@ -1,5 +1,5 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -20,9 +20,20 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <HydrationReadySignal />
         {children}
         <Scripts />
       </body>
     </html>
   );
+}
+
+function HydrationReadySignal() {
+  useEffect(() => {
+    const target = window as typeof window & { __animatedSvgsHydrated?: boolean };
+    target.__animatedSvgsHydrated = true;
+    window.dispatchEvent(new Event("animated-svgs:hydrated"));
+  }, []);
+
+  return null;
 }
