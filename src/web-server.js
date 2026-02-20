@@ -271,16 +271,63 @@ async function serveStatic(urlPath, response) {
 
 async function handleNext(request, response) {
   const body = await parseBody(request);
+  const model = resolveGeminiModel(readModelFromBody(body));
+  const key = findGeminiKey();
+  const selection = await resolveNextPromptSelection({
+    model,
+    apiKey: key ? key.value : null,
+  });
+  const payload = toPromptSelectionPayload(selection);
+
+  if (!key) {
+    json(response, 400, {
+      error:
+        "Gemini API key missing. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env before using Next.",
+      ...payload,
+    });
+    return;
+  }
+
+  if (selection.needsApiKey) {
+    json(response, 400, {
+      error:
+        "Gemini API key missing. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env before using Next.",
+      ...payload,
+    });
+    return;
+  }
+
+  await generateFromPrompt({
+    response,
+    apiKey: key.value,
+    model,
+    ...payload,
+  });
+}
+
+async function resolveNextPromptSelection({ model, apiKey }) {
   let prompt = "";
   let category = null;
   let seed = null;
   let promptIndex = null;
   let promptCount = null;
-  const model = resolveGeminiModel(readModelFromBody(body));
+  let needsApiKey = false;
 
   if (WEB_PROMPT_MODE === "madlib") {
     seed = buildMadlibSeed();
     category = seed.category;
+
+    if (!apiKey) {
+      needsApiKey = true;
+    } else {
+      const madlibText = buildMadlibText(seed);
+      const expanded = await expandMadlibPrompt({
+        apiKey,
+        model,
+        madlibText,
+      });
+      prompt = expanded.prompt;
+    }
   } else {
     const next = getNextFixedPrompt();
     prompt = next.prompt;
@@ -289,42 +336,48 @@ async function handleNext(request, response) {
     category = "fixed-prompts";
   }
 
-  const key = findGeminiKey();
-  if (!key) {
-    json(response, 400, {
-      error:
-        "Gemini API key missing. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env before using Next.",
-      prompt,
-      category,
-      seed,
-      promptIndex,
-      promptCount,
-      promptMode: WEB_PROMPT_MODE,
-    });
-    return;
-  }
-
-  if (WEB_PROMPT_MODE === "madlib") {
-    const madlibText = buildMadlibText(seed);
-    const expanded = await expandMadlibPrompt({
-      apiKey: key.value,
-      model,
-      madlibText,
-    });
-    prompt = expanded.prompt;
-  }
-
-  await generateFromPrompt({
-    response,
-    apiKey: key.value,
-    model,
+  return {
     prompt,
     category,
     seed,
     promptIndex,
     promptCount,
     promptMode: WEB_PROMPT_MODE,
+    needsApiKey,
+  };
+}
+
+function toPromptSelectionPayload(selection) {
+  return {
+    prompt: selection.prompt,
+    category: selection.category,
+    seed: selection.seed,
+    promptIndex: selection.promptIndex,
+    promptCount: selection.promptCount,
+    promptMode: selection.promptMode,
+  };
+}
+
+async function handleNextPrompt(request, response) {
+  const body = await parseBody(request);
+  const model = resolveGeminiModel(readModelFromBody(body));
+  const key = findGeminiKey();
+  const selection = await resolveNextPromptSelection({
+    model,
+    apiKey: key ? key.value : null,
   });
+  const payload = toPromptSelectionPayload(selection);
+
+  if (selection.needsApiKey) {
+    json(response, 400, {
+      error:
+        "Gemini API key missing. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env before using Next.",
+      ...payload,
+    });
+    return;
+  }
+
+  json(response, 200, payload);
 }
 
 async function generateFromPrompt({
@@ -404,6 +457,11 @@ async function handleGenerate(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
   const model = resolveGeminiModel(readModelFromBody(body));
+  const category = typeof body.category === "string" ? body.category : "custom";
+  const promptMode = typeof body.promptMode === "string" ? body.promptMode : "custom";
+  const seed = body.seed && typeof body.seed === "object" ? body.seed : null;
+  const promptIndex = Number.isInteger(body.promptIndex) ? body.promptIndex : null;
+  const promptCount = Number.isInteger(body.promptCount) ? body.promptCount : null;
   if (!prompt) {
     json(response, 400, { error: "Missing prompt." });
     return;
@@ -415,8 +473,11 @@ async function handleGenerate(request, response) {
       error:
         "Gemini API key missing. Set GEMINI_API_KEY or GOOGLE_API_KEY in .env before generating.",
       prompt,
-      category: "custom",
-      promptMode: "custom",
+      category,
+      seed,
+      promptIndex,
+      promptCount,
+      promptMode,
     });
     return;
   }
@@ -426,8 +487,11 @@ async function handleGenerate(request, response) {
     apiKey: key.value,
     model,
     prompt,
-    category: typeof body.category === "string" ? body.category : "custom",
-    promptMode: typeof body.promptMode === "string" ? body.promptMode : "custom",
+    category,
+    seed,
+    promptIndex,
+    promptCount,
+    promptMode,
   });
 }
 
@@ -565,6 +629,11 @@ async function handleUnhideLibrarySvg(request, response) {
 
 async function route(request, response) {
   const url = new URL(request.url || "/", `http://${HOST}:${PORT}`);
+
+  if (request.method === "POST" && url.pathname === "/api/next-prompt") {
+    await handleNextPrompt(request, response);
+    return;
+  }
 
   if (request.method === "POST" && url.pathname === "/api/next") {
     await handleNext(request, response);

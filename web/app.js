@@ -173,7 +173,9 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error || "Request failed.");
+    const error = new Error(payload.error || "Request failed.");
+    error.payload = payload;
+    throw error;
   }
   return payload;
 }
@@ -329,6 +331,22 @@ function applyGenerationPayload(payload) {
   }
 }
 
+function applyPromptSelection(payload) {
+  currentPrompt = payload.prompt || "";
+  currentCategory = payload.category || "";
+  currentSeed = payload.seed || null;
+  currentPromptIndex = Number.isInteger(payload.promptIndex) ? payload.promptIndex : null;
+  currentPromptCount = Number.isInteger(payload.promptCount) ? payload.promptCount : null;
+  currentPromptMode = payload.promptMode || null;
+  currentAssetName = null;
+  currentAssetScope = null;
+
+  promptEl.textContent = currentPrompt || "(No prompt selected)";
+  renderMeta();
+  renderModelMeta({ model: getSelectedModel() });
+  renderModelResponse("");
+}
+
 async function previewLibraryItem(item) {
   try {
     setStatus(`Loading ${item.name}...`, { isLoadingState: true });
@@ -403,18 +421,38 @@ async function unhideLibraryItem(name) {
 }
 
 async function nextRandom() {
+  const model = getSelectedModel();
   try {
     setLoading(true);
-    setStatus("Generating next preset prompt...", { isLoadingState: true });
-    const payload = await fetchJson("/api/next", {
+    setStatus("Selecting next preset prompt...", { isLoadingState: true });
+    const selection = await fetchJson("/api/next-prompt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: getSelectedModel() }),
+      body: JSON.stringify({ model }),
+    });
+    applyPromptSelection(selection);
+
+    setStatus("Generating selected prompt...", { isLoadingState: true });
+    const payload = await fetchJson("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: selection.prompt,
+        category: selection.category,
+        seed: selection.seed,
+        promptIndex: selection.promptIndex,
+        promptCount: selection.promptCount,
+        promptMode: selection.promptMode,
+        model,
+      }),
     });
     applyGenerationPayload(payload);
     await loadLibrary();
     setStatus(currentAssetName ? `Done. Saved ${currentAssetName}.` : "Done.");
   } catch (error) {
+    if (error?.payload && Object.prototype.hasOwnProperty.call(error.payload, "prompt")) {
+      applyPromptSelection(error.payload);
+    }
     setStatus(error.message, { isError: true });
   } finally {
     setLoading(false);
