@@ -1,7 +1,7 @@
 # AGENTS
 
 ## What this project does
-`animated-svgs` is a local Node.js toolkit for generating animated SVGs with Gemini, then cleaning and QA-checking them.
+`animated-svgs` is a TanStack Start + React + TypeScript app and CLI toolkit for generating animated SVGs with Gemini, then cleaning and QA-checking them.
 
 It supports:
 - A CLI pipeline for one-off runs and batch experiments.
@@ -64,7 +64,7 @@ animated-svgs/
   src/
     cli.js                  Main CLI entrypoint
     check-gemini-key.js     API key detection helper used by npm scripts
-    web-server.js           Local web server for quick generation UI
+    web-server.js           TanStack Start web runtime launcher
     lib/
       pipeline.js           End-to-end run orchestration
       gemini.js             Gemini prompt expansion + SVG generation
@@ -77,7 +77,7 @@ animated-svgs/
       utils.js              Shared parsing and file helpers
       madlib.js             Mad-lib prompt mode helpers
       web-prompts.js        Fixed prompt rotation list for web UI
-  web/                      Static frontend (index.html, app.js, styles.css)
+  public/                   Runtime web assets (scripts + styles)
   test/                     End-to-end test coverage
   runs*/                    Generated pipeline/iteration artifacts
   qa-output*/               QA output folders
