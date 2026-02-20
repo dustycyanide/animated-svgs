@@ -16,7 +16,11 @@
     "dashboard": "node src/cli.js dashboard",
     "view": "node src/cli.js view",
     "test:e2e": "node --test test/e2e.test.js test/web-seed.test.js test/web-paste-import.test.js test/web-contracts.test.js test/web-grid-parity.test.js test/web-workbench-parity.test.js test/preprocess.test.js test/gemini-polish-template.test.js test/discord-export.test.js",
-    "probe:gemini": "node scripts/probe-gemini-response.js"
+    "probe:gemini": "node scripts/probe-gemini-response.js",
+    "test:ui": "playwright test --config test/playwright.config.js",
+    "test:ui:update": "playwright test --config test/playwright.config.js --update-snapshots",
+    "test:ui:loop": "playwright test --config test/playwright.config.js --workers=1 --repeat-each=6",
+    "test:ui:headed": "playwright test --config test/playwright.config.js --headed --project=chromium-desktop"
   },
   "keywords": [],
   "author": "",
@@ -35,6 +39,7 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^25.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

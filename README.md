@@ -64,6 +64,8 @@ npm run view -- --dir runs-lab --port 4173
 npm run web
 npm run typecheck
 npm run test:e2e
+npm run test:ui
+npm run test:ui:loop
 npm run probe:gemini
 ```
 
@@ -117,6 +119,32 @@ Output locations:
 - Created SVGs: `results/web-created/`
 - Hidden/archived SVGs: `results/web-archived/`
 - On first run, sample SVGs from `examples/` are seeded into the created library
+
+## Playwright UI loop
+
+Install Chromium once for Playwright:
+
+```bash
+npx playwright install chromium
+```
+
+Run the visual + interaction UI suite:
+
+```bash
+npm run test:ui
+```
+
+Update visual snapshots after intentional UI changes:
+
+```bash
+npm run test:ui:update
+```
+
+Run repeated loop checks (6 consecutive runs, single worker):
+
+```bash
+npm run test:ui:loop
+```
 
 ## Pipeline flow
 
