@@ -1,20 +1,27 @@
 # animated-svgs
 
-First-time setup guide for running this project locally.
+Tiny Node.js toolkit for generating animated SVGs with Gemini, then cleaning and QA-checking them.
 
-## Prerequisites
+## Stack
 
-- Node.js 18 or newer
-- npm
+- Node.js 18+
+- Gemini API (`gemini-3.1-pro-preview` by default)
+- Local CLI + local web UI
+- Optional Playwright render checks
 
-Check versions:
+## Sample SVGs
 
-```bash
-node -v
-npm -v
-```
+### Chameleon sample
 
-## 1) Download and install dependencies
+![Animated chameleon sample](examples/chameleon.svg)
+
+### Pulse sample
+
+![Animated pulse sample](examples/pulse.svg)
+
+## Quickstart
+
+### 1) Install
 
 ```bash
 git clone <your-repo-url>
@@ -22,46 +29,43 @@ cd animated-svgs
 npm install
 ```
 
-## 2) Create a `.env` file
-
-Copy the template and fill in your key:
+### 2) Add your Gemini API key
 
 ```bash
 cp .env.example .env
 ```
 
-`.env.example` contains:
+Then set one of:
 
-```bash
-GEMINI_API_KEY=
-```
+- `GEMINI_API_KEY` (preferred)
+- `GOOGLE_API_KEY` (also supported)
 
-Notes:
-
-- `GOOGLE_API_KEY` also works if you prefer that name.
-- `GEMINI_API_KEY` is the preferred variable.
-- The default model fallback is `gemini-3.1-pro-preview` unless you override it.
-
-## 3) Verify your API key is detected
+### 3) Verify key detection
 
 ```bash
 npm run check:key
 ```
 
-Expected result: a success message saying the key was found (value stays hidden).
-
-## 4) Optional: install Chromium for render-based QA
-
-Only needed if you want Playwright render/frame-diff checks:
-
-```bash
-npx playwright install chromium
-```
-
-## 5) Quick smoke check (local, no API call)
+### 4) Run a local no-API smoke check
 
 ```bash
 npm run pipeline -- --input-svg examples/pulse.svg --name local-smoke
 ```
 
-If this succeeds, your local setup is working.
+### 5) Run generation
+
+```bash
+npm run pipeline -- --prompt "A glowing jellyfish drifting in deep ocean currents."
+```
+
+## Optional commands
+
+```bash
+npm run web
+npm run iterate -- --config configs/iteration.local.json
+npm run qa -- --input examples/pulse.svg --out-dir qa-output --report qa-output/report.json
+```
+
+## Agent-friendly setup
+
+If you use a coding agent, it can usually complete install/setup by reading this README and running the commands above. The only hard requirement is having a Gemini API key in your environment.

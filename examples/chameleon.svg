@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#e8f5e9"/>
+      <stop offset="100%" stop-color="#a5d6a7"/>
+    </radialGradient>
+    <linearGradient id="woodGrad" x1="0%" x2="100%" y1="0%" y2="10%">
+      <stop offset="0%" stop-color="#5d4037"/>
+      <stop offset="50%" stop-color="#795548"/>
+      <stop offset="100%" stop-color="#4e342e"/>
+    </linearGradient>
+    <style>
+      @keyframes colorCycleFill{0%{fill:#4caf50}33%{fill:#ff9800}66%{fill:#00bcd4}to{fill:#e91e63}}@keyframes colorCycleStroke{0%{stroke:#4caf50}33%{stroke:#ff9800}66%{stroke:#00bcd4}to{stroke:#e91e63}}@keyframes sway{0%{transform:rotate(-5deg)}to{transform:rotate(5deg)}}.cham-fill{animation:colorCycleFill 15s infinite alternate ease-in-out}.cham-stroke{animation:colorCycleStroke 15s infinite alternate ease-in-out}.leaf{animation:sway 4s infinite alternate ease-in-out;transform-origin:center}
+    </style>
+  </defs>
+  <path fill="url(#bgGrad)" d="M0 0h1024v1024H0z"/>
+  <path fill="#81c784" d="M100-50q150 150 50 300Q50 100 100-50" class="leaf" opacity=".6"/>
+  <path fill="#81c784" d="M900-100q-225 225-75 450 150-225 75-450" class="leaf" opacity=".6"/>
+  <path fill="none" stroke="url(#woodGrad)" stroke-linecap="round" stroke-width="60" d="M-50 700q300-50 550 0t600-200"/>
+  <path fill="none" stroke="url(#woodGrad)" stroke-linecap="round" stroke-width="40" d="M500 700q150 150 300 400"/>
+  <path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="25" d="m450 580-40 100 30 30" class="cham-stroke"/>
+  <path fill="none" stroke-linecap="round" stroke-width="8" d="m440 710-30 20m30-20 30 20" class="cham-stroke"/>
+  <circle cx="680" cy="410" r="25" fill="#c5e1a5" stroke="#333" stroke-width="3"/>
+  <circle cx="680" cy="410" r="6" fill="#111">
+    <animateTransform attributeName="transform" calcMode="spline" dur="8s" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0; 0.25; 0.5; 0.75; 1" repeatCount="indefinite" type="translate" values="-12,-6; 8,-4; -10,10; -4,-8; -12,-6"/>
+  </circle>
+  <path fill="none" stroke-linecap="round" stroke-width="40" d="M330 550c-180 0-230 200-80 250 100 30 150-100 50-150-80-50-120 50-50 80 30 10 50-30 20-50" class="cham-stroke"/>
+  <path stroke="#333" stroke-width="4" d="M320 550c0-200 280-200 330-70 30 70-150 120-330 70Z" class="cham-fill"/>
+  <path fill="#81c784" stroke="#333" stroke-width="3" d="m350 420-10-30 30 20m40-25-10-35 30 25m50-10-5-35 30 30m45 5 5-35 25 35m30 25 15-35 15 45m15 35 30-25-10 45"/>
+  <path stroke="#333" stroke-linejoin="round" stroke-width="4" d="M600 420q150-70 200 60-100 120-200 40Z" class="cham-fill"/>
+  <path fill="none" stroke="#333" stroke-linecap="round" stroke-width="4" d="M800 480q-80 20-150 10"/>
+  <path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="30" d="m580 540 50 110-30 60" class="cham-stroke"/>
+  <path fill="none" stroke-linecap="round" stroke-width="10" d="m600 710-30 20m30-20 30 30" class="cham-stroke"/>
+  <g transform="translate(710 440)">
+    <circle cx="0" cy="0" r="35" stroke="#333" stroke-width="4" class="cham-fill"/>
+    <circle cx="0" cy="0" r="25" fill="#fff59d" stroke="#333" stroke-width="2"/>
+    <circle cx="0" cy="0" r="8" fill="#111">
+      <animateTransform attributeName="transform" calcMode="spline" dur="8s" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0; 0.25; 0.5; 0.75; 1" repeatCount="indefinite" type="translate" values="-15,-8; 10,-5; -12,12; -5,-10; -15,-8"/>
+    </circle>
+    <path stroke="#333" stroke-width="3" d="M-35 0a35 35 0 0 1 70 0 35 15 0 0 0-70 0Z" class="cham-fill"/>
+    <path stroke="#333" stroke-width="3" d="M-35 0a35 35 0 0 0 70 0 35 15 0 0 1-70 0Z" class="cham-fill"/>
+  </g>
+  <g>
+    <animateMotion calcMode="spline" dur="8s" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0; 0.25; 0.5; 0.75; 1" path="M 100 200 Q 900 150 850 350 Q 200 800 300 200 Q 500 100 100 200" repeatCount="indefinite"/>
+    <g>
+      <animateTransform attributeName="transform" dur="0.05s" repeatCount="indefinite" type="rotate" values="-15; 15; -15"/>
+      <ellipse cx="-8" cy="-8" fill="#fff" stroke="#ccc" stroke-width="1" opacity=".8" rx="10" ry="6" transform="rotate(-45 -8 -8)"/>
+      <ellipse cx="8" cy="-8" fill="#fff" stroke="#ccc" stroke-width="1" opacity=".8" rx="10" ry="6" transform="rotate(45 8 -8)"/>
+      <circle cx="0" cy="0" r="6" fill="#222"/>
+      <circle cx="0" cy="4" r="8" fill="#111"/>
+    </g>
+  </g>
+</svg>
