@@ -508,9 +508,28 @@ function renderModelResponse(rawModelResponse) {
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
-  const payload = await response.json();
+  const raw = await response.text();
+  let payload = {};
+
+  if (raw.trim()) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      const statusText = [response.status, response.statusText].filter(Boolean).join(" ").trim();
+      const preview = raw.trim().slice(0, 240).replace(/\s+/g, " ");
+      throw new Error(
+        `API returned a non-JSON response (${statusText || "unknown status"}): ${preview || "[empty body]"}`,
+      );
+    }
+  }
+
   if (!response.ok) {
-    const error = new Error(payload.error || "Request failed.");
+    const defaultMessage = `Request failed (${response.status || "unknown"}).`;
+    const errorMessage =
+      payload && typeof payload.error === "string" && payload.error.trim().length > 0
+        ? payload.error
+        : defaultMessage;
+    const error = new Error(errorMessage);
     error.payload = payload;
     throw error;
   }

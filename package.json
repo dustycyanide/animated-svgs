@@ -6,13 +6,16 @@
   "scripts": {
     "check:key": "node src/check-gemini-key.js",
     "web": "node src/web-server.js",
+    "web:dev": "vite dev --config vite.config.mts --host 127.0.0.1 --port 3000",
+    "web:build": "vite build --config vite.config.mts",
+    "typecheck": "tsc --noEmit",
     "pipeline": "node src/cli.js run",
     "pipeline:sword": "node src/cli.js run --prompt-file prompts/sword-swing.txt --name sword-swing",
     "qa": "node src/cli.js qa",
     "iterate": "node src/cli.js iterate",
     "dashboard": "node src/cli.js dashboard",
     "view": "node src/cli.js view",
-    "test:e2e": "node --test test/e2e.test.js test/web-seed.test.js test/web-paste-import.test.js test/preprocess.test.js test/gemini-polish-template.test.js test/discord-export.test.js",
+    "test:e2e": "node --test test/e2e.test.js test/web-seed.test.js test/web-paste-import.test.js test/web-contracts.test.js test/web-grid-parity.test.js test/web-workbench-parity.test.js test/preprocess.test.js test/gemini-polish-template.test.js test/discord-export.test.js",
     "probe:gemini": "node scripts/probe-gemini-response.js"
   },
   "keywords": [],
@@ -21,8 +24,23 @@
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "@tanstack/react-router": "^1.161.3",
+    "@tanstack/react-start": "^1.161.3",
+    "@tanstack/router-plugin": "^1.161.3",
     "dotenv": "^17.3.1",
     "fast-xml-parser": "^5.3.6",
-    "puppeteer-core": "^24.37.5"
+    "nitro": "^3.0.1-alpha.2",
+    "puppeteer-core": "^24.37.5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }

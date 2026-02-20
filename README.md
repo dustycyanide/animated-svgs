@@ -1,6 +1,6 @@
 # animated-svgs
 
-Local Node.js toolkit for generating animated SVGs with Gemini, then preprocessing and QA-checking outputs. The web workbench can also export SVG animations to Discord-compatible files (animated WebP, GIF, APNG).
+TanStack Start + React + TypeScript app and CLI toolkit for generating animated SVGs with Gemini, then preprocessing and QA-checking outputs. The web workbench can also export SVG animations to Discord-compatible files (animated WebP, GIF, APNG).
 
 ## Recent updates
 
@@ -62,6 +62,7 @@ npm run iterate -- --config configs/iteration.local.json
 npm run dashboard -- --dir runs-lab
 npm run view -- --dir runs-lab --port 4173
 npm run web
+npm run typecheck
 npm run test:e2e
 npm run probe:gemini
 ```
@@ -73,6 +74,10 @@ Start:
 ```bash
 npm run web
 ```
+
+Notes:
+
+- `npm run web` runs the TanStack Start + React + TypeScript runtime.
 
 Routes:
 

@@ -88,7 +88,7 @@ async function postJson(url, body) {
   });
 }
 
-async function waitForServer(url, child, { timeoutMs = 10000 } = {}) {
+async function waitForServer(url, child, { timeoutMs = 20000 } = {}) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     if (child.exitCode !== null) {

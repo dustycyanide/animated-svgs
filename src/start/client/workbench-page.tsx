@@ -1,13 +1,28 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Animated SVG Workbench</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <main class="app">
+import type { ReactElement } from "react";
+
+const WORKBENCH_BOOTSTRAP_SCRIPT = `
+(() => {
+  if (window.__animatedSvgsWorkbenchBootstrapped) {
+    return;
+  }
+  window.__animatedSvgsWorkbenchBootstrapped = true;
+
+  const boot = () => {
+    import("/app.js").catch((error) => {
+      console.error("Failed to load workbench runtime.", error);
+    });
+  };
+
+  if (document.readyState === "complete") {
+    boot();
+    return;
+  }
+
+  window.addEventListener("load", boot, { once: true });
+})();
+`;
+
+const WORKBENCH_MARKUP = String.raw`<main class="app">
       <header class="hero">
         <div class="hero-head">
           <div>
@@ -271,8 +286,20 @@
           </details>
         </section>
       </div>
-    </main>
+    </main>`;
 
-    <script src="/app.js"></script>
-  </body>
-</html>
+export function getWorkbenchPageHead() {
+  return {
+    meta: [{ title: "Animated SVG Workbench" }],
+    links: [{ rel: "stylesheet", href: "/styles.css" }],
+  };
+}
+
+export function WorkbenchPage(): ReactElement {
+  return (
+    <>
+      <div dangerouslySetInnerHTML={{ __html: WORKBENCH_MARKUP }} />
+      <script dangerouslySetInnerHTML={{ __html: WORKBENCH_BOOTSTRAP_SCRIPT }} />
+    </>
+  );
+}

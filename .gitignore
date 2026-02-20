@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.output/
 
 # Secrets and local env
 .env
