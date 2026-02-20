@@ -3,7 +3,6 @@ const path = require("path");
 const { generateAnimatedSvg } = require("./gemini");
 const { resolveGeminiModel } = require("./env");
 const { preprocessSvg } = require("./preprocess");
-const { optimizeSvg } = require("./postprocess");
 const { runQa } = require("./qa");
 const {
   ensureDir,
@@ -17,6 +16,17 @@ async function writeJson(filePath, payload) {
   await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+function parseOptionalPositiveNumber(input) {
+  if (input === undefined || input === null) {
+    return null;
+  }
+  const value = Number(input);
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
 async function runPipeline(options) {
   const usingInputSvg = Boolean(options.inputSvg);
   let prompt = "Local SVG input pipeline run.";
@@ -27,12 +37,9 @@ async function runPipeline(options) {
     });
   }
 
-  const width = parseNumber(options.width, 1024);
-  const height = parseNumber(options.height, 1024);
+  const width = parseOptionalPositiveNumber(options.width);
+  const height = parseOptionalPositiveNumber(options.height);
   const model = resolveGeminiModel(options.model);
-  const render = options.render !== false;
-  const renderDelayMs = parseNumber(options.renderDelayMs, 1200);
-  const motionThreshold = parseNumber(options.motionThreshold, 0.002);
   const runName = slugify(options.name || prompt.slice(0, 40) || "animated-svg");
   const outRoot = path.resolve(process.cwd(), options.outDir || "runs");
   const runDir = path.join(outRoot, `${timestampId()}-${runName}`);
@@ -60,32 +67,14 @@ async function runPipeline(options) {
   await fs.writeFile(path.join(runDir, "01-prompt.txt"), `${prompt}\n`, "utf8");
   await fs.writeFile(path.join(runDir, "02-raw-response.txt"), generation.text, "utf8");
 
-  const preprocessed = preprocessSvg(generation.text, { width, height });
+  const preprocessed = preprocessSvg(generation.text);
   await fs.writeFile(path.join(runDir, "03-preprocessed.svg"), preprocessed.svg, "utf8");
   await writeJson(path.join(runDir, "03-preprocess-notes.json"), {
     notes: preprocessed.notes,
   });
 
-  const qaPre = await runQa(preprocessed.svg, {
-    render,
-    outputDir: runDir,
-    label: "preprocessed",
-    delayMs: renderDelayMs,
-    motionThreshold,
-  });
-  await writeJson(path.join(runDir, "04-qa-preprocessed.json"), qaPre);
-
-  const optimized = optimizeSvg(preprocessed.svg);
-  await fs.writeFile(path.join(runDir, "05-optimized.svg"), optimized.svg, "utf8");
-
-  const qaPost = await runQa(optimized.svg, {
-    render,
-    outputDir: runDir,
-    label: "optimized",
-    delayMs: renderDelayMs,
-    motionThreshold,
-  });
-  await writeJson(path.join(runDir, "06-qa-optimized.json"), qaPost);
+  const qa = await runQa(preprocessed.svg);
+  await writeJson(path.join(runDir, "04-qa.json"), qa);
 
   const summary = {
     runDir,
@@ -93,16 +82,10 @@ async function runPipeline(options) {
     modelUsed: generation.modelVersion,
     promptLength: prompt.length,
     options: {
-      width,
-      height,
-      render,
-      renderDelayMs,
-      motionThreshold,
+      ...(width ? { width } : {}),
+      ...(height ? { height } : {}),
     },
-    qa: {
-      preprocessed: qaPre.summary,
-      optimized: qaPost.summary,
-    },
+    qa: qa.summary,
     usageMetadata: generation.usageMetadata,
   };
   await writeJson(path.join(runDir, "07-summary.json"), summary);
@@ -119,20 +102,9 @@ async function runQaOnly(options) {
   }
 
   const svg = await fs.readFile(inputPath, "utf8");
-  const qaOutDir = options.outDir
-    ? path.resolve(process.cwd(), options.outDir)
-    : null;
-  if (qaOutDir) {
-    await ensureDir(qaOutDir);
-  }
-
-  const report = await runQa(svg, {
-    render: options.render !== false,
-    outputDir: qaOutDir,
-    label: options.name ? slugify(options.name) : "qa",
-    delayMs: parseNumber(options.renderDelayMs, 1200),
-    motionThreshold: parseNumber(options.motionThreshold, 0.002),
-  });
+  void options.outDir;
+  void options.name;
+  const report = await runQa(svg);
 
   return report;
 }

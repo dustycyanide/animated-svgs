@@ -8,18 +8,41 @@ const FIXED_WEB_PROMPTS = [
 
 let nextPromptIndex = 0;
 
-function getNextFixedPrompt() {
-  const index = nextPromptIndex % FIXED_WEB_PROMPTS.length;
-  nextPromptIndex += 1;
+function normalizePromptIndex(index) {
+  const total = FIXED_WEB_PROMPTS.length;
+  if (total <= 0) {
+    return 0;
+  }
+  const numeric = Number.isInteger(index) ? index : 0;
+  return ((numeric % total) + total) % total;
+}
 
+function getFixedPromptAt(index) {
+  const promptIndex = normalizePromptIndex(index);
   return {
-    prompt: FIXED_WEB_PROMPTS[index],
-    promptIndex: index,
+    prompt: FIXED_WEB_PROMPTS[promptIndex] || "",
+    promptIndex,
     promptCount: FIXED_WEB_PROMPTS.length,
   };
 }
 
+function listFixedPrompts() {
+  return FIXED_WEB_PROMPTS.map((prompt, promptIndex) => ({
+    prompt,
+    promptIndex,
+    promptCount: FIXED_WEB_PROMPTS.length,
+  }));
+}
+
+function getNextFixedPrompt() {
+  const next = getFixedPromptAt(nextPromptIndex);
+  nextPromptIndex += 1;
+  return next;
+}
+
 module.exports = {
   FIXED_WEB_PROMPTS,
+  getFixedPromptAt,
   getNextFixedPrompt,
+  listFixedPrompts,
 };

@@ -31,7 +31,6 @@ test("CLI pipeline end-to-end works in local input mode", async () => {
         outDir,
         "--name",
         "e2e",
-        "--no-render",
       ],
       {
         cwd: projectRoot,
@@ -51,9 +50,7 @@ test("CLI pipeline end-to-end works in local input mode", async () => {
       "02-raw-response.txt",
       "03-preprocess-notes.json",
       "03-preprocessed.svg",
-      "04-qa-preprocessed.json",
-      "05-optimized.svg",
-      "06-qa-optimized.json",
+      "04-qa.json",
       "07-summary.json",
     ];
 
@@ -64,11 +61,11 @@ test("CLI pipeline end-to-end works in local input mode", async () => {
     const summaryPath = path.join(runDir, "07-summary.json");
     const summary = JSON.parse(await fs.readFile(summaryPath, "utf8"));
     assert.equal(summary.modelUsed, "local-input");
-    assert.equal(summary.qa.optimized.passed, true);
-    assert.ok(summary.qa.optimized.score >= 75);
+    assert.equal(summary.qa.passed, true);
+    assert.equal(typeof summary.qa.issueCount, "number");
 
-    const optimizedSvg = await fs.readFile(path.join(runDir, "05-optimized.svg"), "utf8");
-    assert.match(optimizedSvg, /<svg\b/i);
+    const preprocessedSvg = await fs.readFile(path.join(runDir, "03-preprocessed.svg"), "utf8");
+    assert.match(preprocessedSvg, /<svg\b/i);
   } finally {
     await fs.rm(tmpRoot, { recursive: true, force: true });
   }

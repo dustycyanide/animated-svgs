@@ -5,8 +5,8 @@
 
 It supports:
 - A CLI pipeline for one-off runs and batch experiments.
-- A tiny local web app with a `Next` button to generate examples quickly.
-- QA utilities for validating structure, animation presence, and motion.
+- A local web app for fast generation loops (fixed prompts, custom prompts, and prompt polishing).
+- QA utilities for validating structure, required SVG components, animation presence, and safety.
 
 ## How it works
 Core pipeline flow (`src/lib/pipeline.js`):
@@ -14,16 +14,20 @@ Core pipeline flow (`src/lib/pipeline.js`):
 2. Generate raw model output with Gemini (`src/lib/gemini.js`) when API mode is used.
 3. Preprocess SVG (`src/lib/preprocess.js`).
 4. Run QA on preprocessed SVG (`src/lib/qa.js`).
-5. Optimize/postprocess SVG (`src/lib/postprocess.js`).
-6. Run QA again and write summary artifacts.
+5. Write summary artifacts.
 
-QA checks include XML validity, animation detection, unsafe pattern checks, and optional Playwright frame-diff motion checks.
+QA checks include XML validity, required SVG components, animation detection, and unsafe pattern checks.
 
 ## How to run
 Prereqs:
 - Node.js 18+
 - `npm install`
 - `.env` with `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) for generation features
+
+Setup:
+```bash
+cp .env.example .env
+```
 
 Common commands:
 ```bash
@@ -32,16 +36,22 @@ npm run pipeline -- --prompt "A glowing jellyfish drifting in deep ocean current
 npm run pipeline -- --input-svg examples/pulse.svg --name local-test
 npm run qa -- --input examples/pulse.svg --out-dir qa-output --report qa-output/report.json
 npm run iterate -- --config configs/iteration.local.json
+npm run dashboard -- --dir runs-lab
 npm run view -- --dir runs-lab --port 4173
 npm run web
 npm run test:e2e
+npm run probe:gemini
 ```
 
 Web app:
 - Start with `npm run web`
 - Open `http://127.0.0.1:3000`
-- `Next` generates from the fixed prompt list in `src/lib/web-prompts.js`
+- `Generate Selected` and `Next Prompt` use the fixed prompt list in `src/lib/web-prompts.js` (default `WEB_PROMPT_MODE=fixed`)
+- `Generate Parallel` runs multiple fixed prompts at once
+- `Generate Custom` runs with your custom prompt text
+- `Polish Prompt` uses Gemini to improve a custom prompt before generation
 - `Save Prompt` appends JSONL records to `prompts/saved-prompts.jsonl`
+- Generated web SVGs are saved under `results/web-created/` and can be moved to `results/web-archived/` from the UI
 
 ## Directory structure
 ```text
@@ -50,15 +60,16 @@ animated-svgs/
   examples/                 Sample SVG inputs for local testing
   prompts/                  Prompt text files + saved prompt log
   scripts/                  Utility scripts (e.g. Gemini response probing)
+  results/                  Web app SVG library (created + archived)
   src/
     cli.js                  Main CLI entrypoint
+    check-gemini-key.js     API key detection helper used by npm scripts
     web-server.js           Local web server for quick generation UI
     lib/
       pipeline.js           End-to-end run orchestration
       gemini.js             Gemini prompt expansion + SVG generation
-      preprocess.js         SVG cleanup/normalization before QA
-      postprocess.js        Optimization pass after preprocessing
-      qa.js                 Structural + animation + optional render QA
+      preprocess.js         SVG extraction from model response text
+      qa.js                 Structural + animation + safety QA
       iteration.js          Batch experiment runner
       dashboard.js          HTML dashboard generation
       view-server.js        Local viewer for iteration outputs

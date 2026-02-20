@@ -22,10 +22,15 @@ async function collectRuns(outDir) {
   const runs = [];
   for (const dirName of runDirs) {
     const absoluteDir = path.join(outDir, dirName);
-    const summaryPath = path.join(absoluteDir, "07-summary.json");
-    if (!(await fileExists(summaryPath))) {
+    const summaryFileName = (await fileExists(path.join(absoluteDir, "07-summary.json")))
+      ? "07-summary.json"
+      : (await fileExists(path.join(absoluteDir, "05-summary.json")))
+        ? "05-summary.json"
+        : null;
+    if (!summaryFileName) {
       continue;
     }
+    const summaryPath = path.join(absoluteDir, summaryFileName);
 
     let summary;
     try {
@@ -35,22 +40,32 @@ async function collectRuns(outDir) {
     }
 
     const stat = await fs.stat(absoluteDir);
-    const optimizedPreview = (await fileExists(path.join(absoluteDir, "05-optimized.svg")))
+    const previewFileName = (await fileExists(path.join(absoluteDir, "05-optimized.svg")))
       ? "05-optimized.svg"
       : "03-preprocessed.svg";
+    const qaFileName = (await fileExists(path.join(absoluteDir, "04-qa.json")))
+      ? "04-qa.json"
+      : (await fileExists(path.join(absoluteDir, "06-qa-optimized.json")))
+        ? "06-qa-optimized.json"
+        : (await fileExists(path.join(absoluteDir, "04-qa-preprocessed.json")))
+          ? "04-qa-preprocessed.json"
+          : null;
 
     runs.push({
       dirName,
       createdAt: stat.mtime.toISOString(),
       model: summary.modelUsed,
       promptLength: summary.promptLength,
+      qaPassed: typeof summary.qa?.passed === "boolean" ? summary.qa.passed : null,
+      qaIssueCount:
+        typeof summary.qa?.issueCount === "number" ? summary.qa.issueCount : null,
       preScore: summary.qa?.preprocessed?.score ?? null,
       preGrade: summary.qa?.preprocessed?.grade ?? null,
       postScore: summary.qa?.optimized?.score ?? null,
       postGrade: summary.qa?.optimized?.grade ?? null,
-      previewPath: `${dirName}/${optimizedPreview}`,
-      summaryPath: `${dirName}/07-summary.json`,
-      qaPath: `${dirName}/06-qa-optimized.json`,
+      previewPath: `${dirName}/${previewFileName}`,
+      summaryPath: `${dirName}/${summaryFileName}`,
+      qaPath: qaFileName ? `${dirName}/${qaFileName}` : null,
     });
   }
 
@@ -67,21 +82,31 @@ function escapeHtml(input) {
 }
 
 function renderRunCard(run) {
-  const score = run.postScore ?? "-";
-  const grade = run.postGrade ?? "-";
+  const hasSimpleQa = typeof run.qaPassed === "boolean";
+  const badge = hasSimpleQa
+    ? run.qaPassed
+      ? "QA PASS"
+      : "QA FAIL"
+    : `${run.postScore ?? "-"} (${run.postGrade ?? "-"})`;
+  const qaLine = hasSimpleQa
+    ? `QA issues: ${run.qaIssueCount ?? "-"}`
+    : `QA pre/post: ${run.preScore ?? "-"} -> ${run.postScore ?? "-"}`;
+  const qaLink = run.qaPath
+    ? `<a href="./${escapeHtml(run.qaPath)}" target="_blank">QA</a>`
+    : "";
   return `
     <article class="card">
       <header class="card-head">
         <h3 title="${escapeHtml(run.dirName)}">${escapeHtml(run.dirName)}</h3>
-        <span class="badge">${escapeHtml(String(score))} (${escapeHtml(String(grade))})</span>
+        <span class="badge">${escapeHtml(String(badge))}</span>
       </header>
       <div class="meta">Model: ${escapeHtml(run.model || "unknown")} | Updated: ${escapeHtml(run.createdAt)}</div>
-      <div class="meta">QA pre/post: ${escapeHtml(String(run.preScore))} -> ${escapeHtml(String(run.postScore))}</div>
+      <div class="meta">${escapeHtml(String(qaLine))}</div>
       <object class="preview" data="./${escapeHtml(run.previewPath)}" type="image/svg+xml"></object>
       <div class="links">
         <a href="./${escapeHtml(run.previewPath)}" target="_blank">SVG</a>
         <a href="./${escapeHtml(run.summaryPath)}" target="_blank">Summary</a>
-        <a href="./${escapeHtml(run.qaPath)}" target="_blank">QA</a>
+        ${qaLink}
       </div>
     </article>
   `;

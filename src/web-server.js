@@ -4,10 +4,9 @@ const path = require("path");
 const { loadEnv, findGeminiKey, resolveGeminiModel, DEFAULT_GEMINI_MODEL } = require("./lib/env");
 const { ensureDir, parseNumber, slugify, timestampId } = require("./lib/utils");
 const { buildMadlibSeed, buildMadlibText } = require("./lib/madlib");
-const { FIXED_WEB_PROMPTS, getNextFixedPrompt } = require("./lib/web-prompts");
+const { FIXED_WEB_PROMPTS, getNextFixedPrompt, listFixedPrompts } = require("./lib/web-prompts");
 const { expandMadlibPrompt, generateAnimatedSvg, polishSvgPrompt } = require("./lib/gemini");
 const { preprocessSvg } = require("./lib/preprocess");
-const { optimizeSvg } = require("./lib/postprocess");
 
 const HOST = "127.0.0.1";
 const PORT = parseNumber(process.env.WEB_PORT, 3000);
@@ -17,6 +16,8 @@ const SAVED_PROMPTS_FILE = path.resolve(process.cwd(), "prompts", "saved-prompts
 const LIBRARY_ROOT = path.resolve(process.cwd(), "results");
 const CREATED_SVGS_DIR = path.resolve(LIBRARY_ROOT, "web-created");
 const ARCHIVED_SVGS_DIR = path.resolve(LIBRARY_ROOT, "web-archived");
+const EXAMPLES_DIR = path.resolve(process.cwd(), "examples");
+const LIBRARY_SEED_MARKER = path.resolve(LIBRARY_ROOT, ".web-library-seeded.json");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -24,6 +25,7 @@ const MIME_TYPES = {
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
 };
+const ALLOWED_THINKING_LEVELS = new Set(["off", "low", "medium", "high"]);
 
 function json(response, status, payload) {
   response.statusCode = status;
@@ -73,6 +75,113 @@ async function resolveUniqueName(directory, fileName) {
   throw new Error("Unable to resolve unique filename.");
 }
 
+async function fileExists(targetPath) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function countSvgFiles(directory) {
+  await ensureDir(directory);
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  return entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".svg")).length;
+}
+
+function titleFromFileName(fileName) {
+  const stem = path.basename(fileName, ".svg");
+  const words = stem.split(/[-_]+/).filter(Boolean);
+  if (!words.length) {
+    return "Starter SVG Example";
+  }
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+async function seedStarterLibraryIfNeeded() {
+  await ensureDir(LIBRARY_ROOT);
+  await ensureDir(CREATED_SVGS_DIR);
+  await ensureDir(ARCHIVED_SVGS_DIR);
+
+  if (await fileExists(LIBRARY_SEED_MARKER)) {
+    return;
+  }
+
+  const [createdCount, archivedCount] = await Promise.all([
+    countSvgFiles(CREATED_SVGS_DIR),
+    countSvgFiles(ARCHIVED_SVGS_DIR),
+  ]);
+
+  if (createdCount > 0 || archivedCount > 0) {
+    const marker = {
+      seededAt: new Date().toISOString(),
+      seededCount: 0,
+      skipped: true,
+      reason: "library-not-empty",
+      createdCount,
+      archivedCount,
+    };
+    await fs.writeFile(LIBRARY_SEED_MARKER, `${JSON.stringify(marker, null, 2)}\n`);
+    return;
+  }
+
+  let exampleEntries = [];
+  try {
+    exampleEntries = await fs.readdir(EXAMPLES_DIR, { withFileTypes: true });
+  } catch {
+    exampleEntries = [];
+  }
+
+  const sourceFiles = exampleEntries
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".svg"))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  let seededCount = 0;
+  const seededFiles = [];
+
+  for (const sourceName of sourceFiles) {
+    const sourcePath = path.join(EXAMPLES_DIR, sourceName);
+    const sourceStem = path.basename(sourceName, ".svg");
+    const targetName = await resolveUniqueName(
+      CREATED_SVGS_DIR,
+      `example-${slugify(sourceStem) || "sample"}.svg`,
+    );
+    const targetSvgPath = path.join(CREATED_SVGS_DIR, targetName);
+    const createdAt = new Date().toISOString();
+    const meta = {
+      name: targetName,
+      createdAt,
+      prompt: `${titleFromFileName(sourceName)} starter example`,
+      category: "starter-example",
+      seed: null,
+      promptIndex: null,
+      promptCount: null,
+      promptMode: "starter-example",
+      model: "local-example",
+      generationConfig: null,
+    };
+
+    await fs.copyFile(sourcePath, targetSvgPath);
+    await fs.writeFile(
+      metadataPathFor(CREATED_SVGS_DIR, targetName),
+      `${JSON.stringify(meta, null, 2)}\n`,
+    );
+
+    seededCount += 1;
+    seededFiles.push(targetName);
+  }
+
+  const marker = {
+    seededAt: new Date().toISOString(),
+    seededCount,
+    seededFiles,
+    sourceDir: EXAMPLES_DIR,
+  };
+  await fs.writeFile(LIBRARY_SEED_MARKER, `${JSON.stringify(marker, null, 2)}\n`);
+}
+
 async function saveGeneratedSvg({
   svg,
   prompt,
@@ -82,6 +191,7 @@ async function saveGeneratedSvg({
   promptCount,
   promptMode,
   model,
+  generationConfig = null,
 }) {
   await ensureDir(CREATED_SVGS_DIR);
   const stamp = timestampId();
@@ -102,6 +212,8 @@ async function saveGeneratedSvg({
     promptCount: Number.isInteger(promptCount) ? promptCount : null,
     promptMode: typeof promptMode === "string" ? promptMode : null,
     model: typeof model === "string" ? model : null,
+    generationConfig:
+      generationConfig && typeof generationConfig === "object" ? generationConfig : null,
   };
 
   await fs.writeFile(svgPath, svg, "utf8");
@@ -139,6 +251,10 @@ async function listLibraryItems(scope = "created") {
         category: meta && typeof meta.category === "string" ? meta.category : null,
         promptMode: meta && typeof meta.promptMode === "string" ? meta.promptMode : null,
         model: meta && typeof meta.model === "string" ? meta.model : null,
+        generationConfig:
+          meta && meta.generationConfig && typeof meta.generationConfig === "object"
+            ? meta.generationConfig
+            : null,
         updatedAt: stat.mtime.toISOString(),
       };
     }),
@@ -181,6 +297,10 @@ async function readLibrarySvg({ scope = "created", name }) {
       category: meta && typeof meta.category === "string" ? meta.category : null,
       promptMode: meta && typeof meta.promptMode === "string" ? meta.promptMode : null,
       model: meta && typeof meta.model === "string" ? meta.model : null,
+      generationConfig:
+        meta && meta.generationConfig && typeof meta.generationConfig === "object"
+          ? meta.generationConfig
+          : null,
     },
   };
 }
@@ -243,8 +363,43 @@ function resolveWebPolishModel(requestedModel) {
   return DEFAULT_GEMINI_MODEL;
 }
 
+function readPositiveInteger(input) {
+  if (input === null || input === undefined || input === "") {
+    return null;
+  }
+  const value = Number.parseInt(String(input), 10);
+  if (!Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function normalizeThinkingLevel(input) {
+  const value = String(input || "low").toLowerCase();
+  if (!ALLOWED_THINKING_LEVELS.has(value)) {
+    return "low";
+  }
+  return value;
+}
+
+function readGenerationConfigFromBody(body) {
+  const maxOutputTokens = readPositiveInteger(body?.maxOutputTokens);
+  const thinkingLevel = normalizeThinkingLevel(body?.thinkingLevel);
+  return {
+    maxOutputTokens,
+    thinkingLevel,
+  };
+}
+
 async function serveStatic(urlPath, response) {
-  const cleanPath = urlPath === "/" ? "/index.html" : urlPath;
+  let cleanPath = urlPath;
+  if (cleanPath === "/") {
+    cleanPath = "/grid.html";
+  } else if (cleanPath === "/generate" || cleanPath === "/workbench") {
+    cleanPath = "/index.html";
+  } else if (cleanPath === "/grid" || cleanPath === "/library") {
+    cleanPath = "/grid.html";
+  }
   const target = path.resolve(PUBLIC_DIR, `.${cleanPath}`);
   if (!target.startsWith(PUBLIC_DIR)) {
     response.statusCode = 403;
@@ -272,6 +427,7 @@ async function serveStatic(urlPath, response) {
 async function handleNext(request, response) {
   const body = await parseBody(request);
   const model = resolveGeminiModel(readModelFromBody(body));
+  const generationConfig = readGenerationConfigFromBody(body);
   const key = findGeminiKey();
   const selection = await resolveNextPromptSelection({
     model,
@@ -301,6 +457,7 @@ async function handleNext(request, response) {
     response,
     apiKey: key.value,
     model,
+    generationConfig,
     ...payload,
   });
 }
@@ -380,6 +537,31 @@ async function handleNextPrompt(request, response) {
   json(response, 200, payload);
 }
 
+async function handlePromptList(response) {
+  if (WEB_PROMPT_MODE !== "fixed") {
+    json(response, 200, {
+      promptMode: WEB_PROMPT_MODE,
+      promptCount: 0,
+      prompts: [],
+    });
+    return;
+  }
+
+  const prompts = listFixedPrompts().map((entry) => ({
+    prompt: entry.prompt,
+    promptIndex: entry.promptIndex,
+    promptCount: entry.promptCount,
+    category: "fixed-prompts",
+    promptMode: WEB_PROMPT_MODE,
+  }));
+
+  json(response, 200, {
+    promptMode: WEB_PROMPT_MODE,
+    promptCount: prompts.length,
+    prompts,
+  });
+}
+
 async function generateFromPrompt({
   response,
   apiKey,
@@ -390,21 +572,23 @@ async function generateFromPrompt({
   promptIndex = null,
   promptCount = null,
   promptMode = "custom",
+  generationConfig = null,
 }) {
+  const maxOutputTokens = readPositiveInteger(generationConfig?.maxOutputTokens);
+  const thinkingLevel = normalizeThinkingLevel(generationConfig?.thinkingLevel);
   const generation = await generateAnimatedSvg({
     apiKey,
     model,
     prompt,
-    width: 1024,
-    height: 1024,
     temperature: 1,
+    maxOutputTokens,
+    thinkingLevel,
   });
   const rawModelResponse = generation.text;
 
-  let optimized;
+  let preprocessed;
   try {
-    const preprocessed = preprocessSvg(rawModelResponse, { width: 1024, height: 1024 });
-    optimized = optimizeSvg(preprocessed.svg);
+    preprocessed = preprocessSvg(rawModelResponse);
   } catch (error) {
     json(response, 422, {
       error: error.message,
@@ -417,13 +601,17 @@ async function generateFromPrompt({
       model: generation.modelVersion,
       finishReason: generation.finishReason,
       usageMetadata: generation.usageMetadata,
+      generationConfig: {
+        maxOutputTokens,
+        thinkingLevel,
+      },
       rawModelResponse,
     });
     return;
   }
 
   const savedAsset = await saveGeneratedSvg({
-    svg: optimized.svg,
+    svg: preprocessed.svg,
     prompt,
     category,
     seed,
@@ -431,6 +619,10 @@ async function generateFromPrompt({
     promptCount,
     promptMode,
     model: generation.modelVersion,
+    generationConfig: {
+      maxOutputTokens,
+      thinkingLevel,
+    },
   });
 
   json(response, 200, {
@@ -440,10 +632,14 @@ async function generateFromPrompt({
     promptIndex,
     promptCount,
     promptMode,
-    svg: optimized.svg,
+    svg: preprocessed.svg,
     model: generation.modelVersion,
     finishReason: generation.finishReason,
     usageMetadata: generation.usageMetadata,
+    generationConfig: {
+      maxOutputTokens,
+      thinkingLevel,
+    },
     rawModelResponse,
     savedAsset,
   });
@@ -457,6 +653,7 @@ async function handleGenerate(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
   const model = resolveGeminiModel(readModelFromBody(body));
+  const generationConfig = readGenerationConfigFromBody(body);
   const category = typeof body.category === "string" ? body.category : "custom";
   const promptMode = typeof body.promptMode === "string" ? body.promptMode : "custom";
   const seed = body.seed && typeof body.seed === "object" ? body.seed : null;
@@ -492,6 +689,7 @@ async function handleGenerate(request, response) {
     promptIndex,
     promptCount,
     promptMode,
+    generationConfig,
   });
 }
 
@@ -499,6 +697,9 @@ async function handlePolishPrompt(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
   const model = resolveWebPolishModel(readModelFromBody(body));
+  const generationConfig = readGenerationConfigFromBody(body);
+  const maxOutputTokens = readPositiveInteger(generationConfig.maxOutputTokens);
+  const thinkingLevel = normalizeThinkingLevel(generationConfig.thinkingLevel);
   if (!prompt) {
     json(response, 400, { error: "Missing prompt." });
     return;
@@ -519,6 +720,8 @@ async function handlePolishPrompt(request, response) {
     model,
     userPrompt: prompt,
     examples: FIXED_WEB_PROMPTS,
+    maxOutputTokens,
+    thinkingLevel,
   });
 
   json(response, 200, {
@@ -526,6 +729,10 @@ async function handlePolishPrompt(request, response) {
     prompt: polished.prompt,
     model: polished.modelVersion,
     exampleCount: FIXED_WEB_PROMPTS.length,
+    generationConfig: {
+      maxOutputTokens,
+      thinkingLevel,
+    },
   });
 }
 
@@ -575,6 +782,35 @@ async function handleLibraryItem(url, response) {
   } catch (error) {
     if (error && error.code === "ENOENT") {
       json(response, 404, { error: "SVG not found." });
+      return;
+    }
+    throw error;
+  }
+}
+
+async function handleLibraryFile(url, response) {
+  const scope = url.searchParams.get("scope") || "created";
+  const name = url.searchParams.get("name");
+  if (!name) {
+    response.statusCode = 400;
+    response.end("Missing name.");
+    return;
+  }
+
+  const activeScope = scope === "archived" ? "archived" : "created";
+  const fileName = safeAssetName(name);
+  const directory = activeScope === "archived" ? ARCHIVED_SVGS_DIR : CREATED_SVGS_DIR;
+  const svgPath = path.join(directory, fileName);
+
+  try {
+    const svg = await fs.readFile(svgPath, "utf8");
+    response.statusCode = 200;
+    response.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+    response.end(svg);
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      response.statusCode = 404;
+      response.end("SVG not found.");
       return;
     }
     throw error;
@@ -640,6 +876,11 @@ async function route(request, response) {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/prompts") {
+    await handlePromptList(response);
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/save-prompt") {
     await handleSavePrompt(request, response);
     return;
@@ -662,6 +903,11 @@ async function route(request, response) {
 
   if (request.method === "GET" && url.pathname === "/api/library/item") {
     await handleLibraryItem(url, response);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/library/file") {
+    await handleLibraryFile(url, response);
     return;
   }
 
@@ -689,6 +935,7 @@ async function main() {
   await fs.mkdir(PUBLIC_DIR, { recursive: true });
   await ensureDir(CREATED_SVGS_DIR);
   await ensureDir(ARCHIVED_SVGS_DIR);
+  await seedStarterLibraryIfNeeded();
 
   const server = http.createServer((request, response) => {
     route(request, response).catch((error) => {

@@ -3,88 +3,217 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SVG Generator and Viewer</title>
+    <title>Animated SVG Workbench</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app">
-      <header class="header">
-        <h1>SVG Generator and Viewer</h1>
-        <p class="sub">Domains: video games, plants growing, weather.</p>
-      </header>
-
-      <section class="toolbar" aria-label="Generation controls">
-        <div class="actions">
-          <button id="next-btn" class="btn btn-primary" type="button">Next</button>
-          <button id="save-btn" class="btn btn-secondary" type="button" disabled>Save Prompt</button>
-          <button id="copy-btn" class="btn btn-ghost" type="button" disabled>Copy Prompt</button>
-        </div>
-        <p class="hint">Tip: press <kbd>N</kbd> to generate the next preset prompt.</p>
-      </section>
-
-      <section class="custom-card" aria-label="Custom prompt controls">
-        <h2>Custom Prompt</h2>
-        <div class="model-control">
-          <label for="model-input">Model</label>
-          <input
-            id="model-input"
-            class="model-input"
-            type="text"
-            value="gemini-3.1-pro-preview"
-            spellcheck="false"
-            autocomplete="off"
-          />
-        </div>
-        <textarea
-          id="custom-prompt-input"
-          class="custom-input"
-          placeholder="Type your own prompt, then polish or generate..."
-        ></textarea>
-        <div class="actions">
-          <button id="polish-btn" class="btn btn-secondary" type="button">Polish Prompt</button>
-          <button id="generate-custom-btn" class="btn btn-primary" type="button">Generate Custom</button>
-          <button id="use-current-btn" class="btn btn-ghost" type="button">Use Current Prompt</button>
-        </div>
-        <div id="custom-meta" class="meta-line"></div>
-        <p class="hint">Polish rewrites your prompt using the fixed examples as style references.</p>
-      </section>
-
-      <div id="status" class="status" role="status" aria-live="polite">Click Next.</div>
-
-      <div class="meta">
-        <div id="category" class="meta-line"></div>
-        <div id="model-meta" class="meta-line"></div>
-      </div>
-
-      <section class="viewer-card">
-        <object id="svg-viewer" class="viewer" type="image/svg+xml" aria-label="Animated SVG preview"></object>
-        <div id="viewer-empty" class="viewer-empty">No SVG yet. Click Next to generate one.</div>
-      </section>
-
-      <section class="prompt-card">
-        <h2>Prompt</h2>
-        <pre id="prompt" class="prompt"></pre>
-      </section>
-
-      <section class="library-card">
-        <div class="library-head">
-          <h2>Created SVGs</h2>
-          <div class="library-actions">
-            <button id="refresh-library-btn" class="btn btn-ghost" type="button">Refresh</button>
-            <label class="toggle">
-              <input id="show-hidden-toggle" type="checkbox" />
-              Show hidden
+      <header class="hero">
+        <div class="hero-head">
+          <div>
+            <p class="eyebrow">Animated SVG Workbench</p>
+            <h1>Generate, Inspect, and Curate Motion SVGs</h1>
+            <p class="sub">Use fixed examples or your own prompt. Current focus domains: games, plants, and weather systems.</p>
+          </div>
+          <div class="hero-actions">
+            <a href="/" class="btn btn-secondary link-btn hero-grid-link">Open Main Grid</a>
+            <label class="inline-control theme-control" for="theme-select">
+              <span>Theme</span>
+              <select id="theme-select" class="select-input">
+                <option value="light" selected>Light</option>
+                <option value="dark">Dark</option>
+              </select>
             </label>
           </div>
         </div>
-        <div id="library-meta" class="library-meta"></div>
-        <ul id="library-list" class="library-list"></ul>
-      </section>
+      </header>
 
-      <details id="model-details" class="model-details" hidden>
-        <summary id="model-summary">Raw model response</summary>
-        <pre id="model-response" class="model-response"></pre>
-      </details>
+      <div class="layout-grid">
+        <section class="controls-column" aria-label="Prompt and generation controls">
+          <section class="panel generation-card" aria-label="Generation controls">
+            <div class="panel-head">
+              <h2>Generation</h2>
+              <p>Choose a mode, then run generation with one focused control set.</p>
+            </div>
+            <div class="generation-mode-row">
+              <label class="inline-control generation-mode-control" for="generation-mode-select">
+                <span>Prompt Mode</span>
+                <select id="generation-mode-select" class="select-input">
+                  <option value="examples" selected>Examples</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+            </div>
+            <div id="fixed-controls-block" class="mode-controls">
+              <div class="actions prompt-actions">
+                <button id="prev-prompt-btn" class="btn btn-ghost" type="button">Prev Prompt</button>
+                <button id="next-prompt-btn" class="btn btn-ghost" type="button">Next Prompt</button>
+                <label class="inline-control" for="prompt-select">
+                  <span>Example</span>
+                  <select id="prompt-select" class="select-input"></select>
+                </label>
+                <label class="inline-control inline-control-small" for="parallel-count-input">
+                  <span>Parallel</span>
+                  <input id="parallel-count-input" class="number-input" type="number" min="1" value="2" />
+                </label>
+                <button id="next-btn" class="btn btn-primary" type="button">Generate Selected</button>
+                <button id="parallel-btn" class="btn btn-secondary" type="button">Generate Parallel</button>
+              </div>
+              <p class="hint">Shortcuts: <kbd>N</kbd> next prompt, <kbd>G</kbd> generate selected.</p>
+            </div>
+            <div id="custom-controls-block" class="mode-controls" hidden>
+              <textarea
+                id="custom-prompt-input"
+                class="custom-input"
+                placeholder="Type your own prompt, then polish or generate..."
+              ></textarea>
+              <div class="actions">
+                <button id="polish-btn" class="btn btn-secondary" type="button">Polish Prompt</button>
+                <button id="generate-custom-btn" class="btn btn-primary" type="button">Generate Custom</button>
+              </div>
+              <div id="custom-meta" class="meta-line"></div>
+              <p class="hint">
+                Polish rewrites your prompt using fixed examples as style references. Shortcut:
+                <kbd>Ctrl/Cmd + Enter</kbd> generate custom.
+              </p>
+            </div>
+            <details id="advanced-generation-details" class="config-details">
+              <summary>Advanced Generation Settings</summary>
+              <div class="config-details-body">
+                <div class="model-control">
+                  <label for="model-input">Model</label>
+                  <input
+                    id="model-input"
+                    class="model-input"
+                    type="text"
+                    value="gemini-3.1-pro-preview"
+                    spellcheck="false"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="generation-config-grid">
+                  <label class="inline-control" for="max-tokens-input">
+                    <span>Max Tokens</span>
+                    <input
+                      id="max-tokens-input"
+                      class="number-input"
+                      type="number"
+                      min="256"
+                      max="65536"
+                      step="1"
+                      value="16384"
+                    />
+                  </label>
+                  <label class="inline-control" for="reasoning-level-select">
+                    <span>Reasoning</span>
+                    <select id="reasoning-level-select" class="select-input">
+                      <option value="off">Off</option>
+                      <option value="low" selected>Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </details>
+            <div class="actions shared-generation-actions">
+              <button id="save-btn" class="btn btn-secondary" type="button" disabled>Save Prompt</button>
+              <button id="copy-btn" class="btn btn-ghost" type="button" disabled>Copy Prompt</button>
+              <button id="use-current-btn" class="btn btn-ghost" type="button">Use Current Prompt</button>
+            </div>
+          </section>
+
+          <section class="panel prompt-card">
+            <div class="panel-head">
+              <h2>Prompt</h2>
+              <p>Active prompt content used for the current preview.</p>
+            </div>
+            <pre id="prompt" class="prompt"></pre>
+          </section>
+        </section>
+
+        <section class="preview-column" aria-label="Preview and output library">
+          <section class="panel status-panel" aria-label="Generation status">
+            <div id="status" class="status" role="status" aria-live="polite">Select a prompt and generate.</div>
+            <div class="meta">
+              <div id="category" class="meta-line"></div>
+              <div id="model-meta" class="meta-line"></div>
+            </div>
+          </section>
+
+          <section class="panel viewer-card">
+            <div class="panel-head">
+              <h2>Preview</h2>
+              <p>Most recent generated or selected SVG output.</p>
+            </div>
+            <div class="carousel-controls" aria-label="Carousel navigation for saved SVGs">
+              <div class="carousel-actions">
+                <button id="carousel-newest-btn" class="btn btn-ghost btn-mini" type="button">Newest</button>
+                <button id="carousel-newer-btn" class="btn btn-ghost btn-mini" type="button">Newer</button>
+                <button id="carousel-older-btn" class="btn btn-ghost btn-mini" type="button">Older</button>
+                <button id="carousel-oldest-btn" class="btn btn-ghost btn-mini" type="button">Oldest</button>
+              </div>
+              <div id="carousel-position" class="carousel-position">No saved SVG selected.</div>
+            </div>
+            <div class="cut-controls" aria-label="Preview crop controls">
+              <label class="inline-control" for="cut-mode-select">
+                <span>Cut</span>
+                <select id="cut-mode-select" class="select-input">
+                  <option value="original" selected>Original</option>
+                  <option value="square">Square</option>
+                  <option value="circle">Circle</option>
+                  <option value="ratio">Ratio</option>
+                </select>
+              </label>
+              <label class="inline-control cut-ratio-control" for="cut-ratio-input">
+                <span>Ratio Arg</span>
+                <input id="cut-ratio-input" class="text-input" type="text" value="16:9" placeholder="16:9 or 1.78" />
+              </label>
+            </div>
+            <div class="viewer-copy">
+              <button id="copy-svg-btn" class="btn btn-ghost btn-mini" type="button" disabled>copy</button>
+              <span id="copy-svg-feedback" class="viewer-copy-feedback" aria-live="polite"></span>
+            </div>
+            <div class="viewer-stage">
+              <object id="svg-viewer" class="viewer" type="image/svg+xml" aria-label="Animated SVG preview"></object>
+              <div id="viewer-empty" class="viewer-empty">No SVG yet. Select a prompt and generate.</div>
+            </div>
+          </section>
+
+          <section class="panel parallel-results-card">
+            <div class="panel-head">
+              <h2>Parallel Results</h2>
+              <p>When you generate in parallel, each result appears here for direct preview.</p>
+            </div>
+            <div id="parallel-meta" class="meta-line">No parallel batch yet.</div>
+            <ul id="parallel-results-list" class="parallel-results-list"></ul>
+          </section>
+
+          <section class="panel library-card">
+            <div class="library-head">
+              <div class="panel-head panel-head-tight">
+                <h2>Created SVGs</h2>
+                <p>Preview saved outputs and move items between visible and hidden sets.</p>
+              </div>
+              <div class="library-actions">
+                <button id="refresh-library-btn" class="btn btn-ghost" type="button">Refresh</button>
+                <a href="/" class="btn btn-secondary link-btn">Open Main Grid</a>
+                <label class="toggle">
+                  <input id="show-hidden-toggle" type="checkbox" />
+                  Show hidden
+                </label>
+              </div>
+            </div>
+            <div id="library-meta" class="library-meta"></div>
+            <ul id="library-list" class="library-list"></ul>
+          </section>
+
+          <details id="model-details" class="panel model-details" hidden>
+            <summary id="model-summary">Raw model response</summary>
+            <pre id="model-response" class="model-response"></pre>
+          </details>
+        </section>
+      </div>
     </main>
 
     <script src="/app.js"></script>

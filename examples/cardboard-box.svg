@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="boxFront" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E28743" />
+      <stop offset="100%" stop-color="#B86629" />
+    </linearGradient>
+    <linearGradient id="boxSide" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C57030" />
+      <stop offset="100%" stop-color="#934E1A" />
+    </linearGradient>
+    <linearGradient id="boxInside" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#555" />
+      <stop offset="100%" stop-color="#222" />
+    </linearGradient>
+    <linearGradient id="tape" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e2e8f0" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#cbd5e1" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="checkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <style>
+      .box-group {
+        transform-origin: 400px 500px;
+        animation: dropAndBounce 4s infinite ease-in-out;
+      }
+      .flap-front {
+        transform-origin: 400px 420px;
+        animation: foldFront 4s infinite ease-in-out;
+      }
+      .flap-back {
+        transform-origin: 400px 320px;
+        animation: foldBack 4s infinite ease-in-out;
+      }
+      .flap-left {
+        transform-origin: 260px 370px;
+        animation: foldLeft 4s infinite ease-in-out;
+      }
+      .flap-right {
+        transform-origin: 540px 370px;
+        animation: foldRight 4s infinite ease-in-out;
+      }
+      .tape {
+        transform-origin: 400px 370px;
+        animation: tapeSeal 4s infinite ease-in-out;
+      }
+      .check-mark {
+        transform-origin: 400px 370px;
+        stroke-dasharray: 200;
+        stroke-dashoffset: 200;
+        animation: drawCheck 4s infinite ease-in-out;
+      }
+      .checkmark-scale {
+        transform-origin: 400px 370px;
+        animation: scaleCheck 4s infinite ease-in-out;
+      }
+      
+      @keyframes dropAndBounce {
+        0%, 10% { transform: translateY(-300px) scaleY(1); opacity: 0; }
+        15% { transform: translateY(0) scaleY(0.9); opacity: 1; }
+        20% { transform: translateY(-40px) scaleY(1.05); }
+        25% { transform: translateY(0) scaleY(1); }
+        85% { transform: translateY(0) scale(1); opacity: 1; }
+        90%, 100% { transform: translateY(50px) scale(0.8); opacity: 0; }
+      }
+      
+      @keyframes foldBack {
+        0%, 30% { transform: skewX(-45deg) scaleY(1) translateY(-60px); opacity: 1; }
+        35%, 100% { transform: skewX(-45deg) scaleY(0) translateY(0); opacity: 0; }
+      }
+      @keyframes foldFront {
+        0%, 35% { transform: skewX(-45deg) scaleY(1) translateY(60px); opacity: 1; }
+        40%, 100% { transform: skewX(-45deg) scaleY(0) translateY(0); opacity: 0; }
+      }
+      @keyframes foldLeft {
+        0%, 40% { transform: skewY(-25deg) scaleX(1) translateX(-60px); opacity: 1; }
+        45%, 100% { transform: skewY(-25deg) scaleX(0) translateX(0); opacity: 0; }
+      }
+      @keyframes foldRight {
+        0%, 45% { transform: skewY(25deg) scaleX(1) translateX(60px); opacity: 1; }
+        50%, 100% { transform: skewY(25deg) scaleX(0) translateX(0); opacity: 0; }
+      }
+      
+      @keyframes tapeSeal {
+        0%, 50% { transform: scaleX(0); opacity: 0; }
+        55%, 100% { transform: scaleX(1); opacity: 1; }
+      }
+      
+      @keyframes drawCheck {
+        0%, 60% { stroke-dashoffset: 200; }
+        70%, 100% { stroke-dashoffset: 0; }
+      }
+      
+      @keyframes scaleCheck {
+        0%, 60% { transform: scale(0); opacity: 0; }
+        65% { transform: scale(1.2); opacity: 1; }
+        70%, 100% { transform: scale(1); opacity: 1; }
+      }
+    </style>
+  </defs>
+
+  <rect width="800" height="800" fill="#f8fafc" />
+
+  <g class="box-group">
+    <!-- Box Shadow -->
+    <ellipse cx="400" cy="530" rx="160" ry="40" fill="#cbd5e1" opacity="0.6" />
+
+    <!-- Inside Box -->
+    <polygon points="260,370 400,320 540,370 400,420" fill="url(#boxInside)" />
+
+    <!-- Flaps Open (Back) -->
+    <g class="flap-back">
+      <polygon points="400,320 540,370 460,330 320,280" fill="#E28743" />
+    </g>
+
+    <!-- Flaps Open (Front) -->
+    <g class="flap-front">
+      <polygon points="260,370 400,420 480,460 340,410" fill="#C57030" />
+    </g>
+
+    <!-- Side Right -->
+    <polygon points="400,420 540,370 540,480 400,530" fill="url(#boxSide)" />
+    
+    <!-- Side Left (Front) -->
+    <polygon points="260,480 400,530 400,420 260,370" fill="url(#boxFront)" />
+
+    <!-- Flaps Open (Left) -->
+    <g class="flap-left">
+      <polygon points="260,370 400,320 320,260 180,310" fill="#B86629" />
+    </g>
+
+    <!-- Flaps Open (Right) -->
+    <g class="flap-right">
+      <polygon points="540,370 400,420 480,480 620,430" fill="#C57030" />
+    </g>
+
+    <!-- Box Top Closed (Appears as flaps fold) -->
+    <polygon points="260,370 400,320 540,370 400,420" fill="#E28743" opacity="0">
+      <animate attributeName="opacity" values="0; 0; 1; 1" keyTimes="0; 0.49; 0.5; 1" dur="4s" repeatCount="indefinite" />
+    </polygon>
+
+    <!-- Tape Sealing -->
+    <polygon class="tape" points="300,355 500,385 490,400 290,370" fill="url(#tape)" />
+
+    <!-- Checkmark Pop-out -->
+    <g class="checkmark-scale">
+      <circle cx="400" cy="370" r="50" fill="url(#checkGradient)" />
+      <path class="check-mark" d="M375,370 L390,385 L425,350" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>

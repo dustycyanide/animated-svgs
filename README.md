@@ -7,7 +7,7 @@ Tiny Node.js toolkit for generating animated SVGs with Gemini, then cleaning and
 - Node.js 18+
 - Gemini API (`gemini-3.1-pro-preview` by default)
 - Local CLI + local web UI
-- Optional Playwright render checks
+- Lightweight structural/safety QA for SVG outputs
 
 ## Sample SVGs
 
@@ -15,9 +15,9 @@ Tiny Node.js toolkit for generating animated SVGs with Gemini, then cleaning and
 
 ![Animated chameleon sample](examples/chameleon.svg)
 
-### Pulse sample
+### Cardboard box sample
 
-![Animated pulse sample](examples/pulse.svg)
+![Animated cardboard box sample](examples/cardboard-box.svg)
 
 ## Quickstart
 
@@ -49,7 +49,7 @@ npm run check:key
 ### 4) Run a local no-API smoke check
 
 ```bash
-npm run pipeline -- --input-svg examples/pulse.svg --name local-smoke
+npm run pipeline -- --input-svg examples/cardboard-box.svg --name local-smoke
 ```
 
 ### 5) Run generation
@@ -63,7 +63,7 @@ npm run pipeline -- --prompt "A glowing jellyfish drifting in deep ocean current
 ```bash
 npm run web
 npm run iterate -- --config configs/iteration.local.json
-npm run qa -- --input examples/pulse.svg --out-dir qa-output --report qa-output/report.json
+npm run qa -- --input examples/cardboard-box.svg --out-dir qa-output --report qa-output/report.json
 ```
 
 ## Agent-friendly setup

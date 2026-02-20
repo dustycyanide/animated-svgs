@@ -9,7 +9,7 @@ let resultSequence = 0;
 const SYSTEM_INSTRUCTION = [
   "You are an expert SVG motion designer.",
   "Return exactly one complete SVG document and nothing else.",
-  "Format example: <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1024 1024\"> ... </svg>.",
+  "Format example: <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 800\"> ... </svg>.",
   "Your first non-whitespace characters must be <svg and your response must end with </svg>.",
   "Output must be valid XML with a single <svg> root.",
   "Include animation using SMIL tags (<animate>, <animateTransform>, <animateMotion>, or <set>) and/or CSS keyframes.",
@@ -28,6 +28,8 @@ const PROMPT_POLISH_SYSTEM_INSTRUCTION = [
   "You are an expert prompt editor for animated SVG generation.",
   "Rewrite user ideas into a concise, vivid, production-ready SVG prompt.",
   "Preserve the user's core intent while improving clarity, motion detail, and style consistency.",
+  "Default to high-level creative direction instead of specific colors, exact visual themes, or tightly constrained styling details.",
+  "Only include detailed color, palette, theme, or style constraints when the user explicitly asks for them.",
   "Return plain text only with no markdown, no bullets, no labels, and no surrounding quotes.",
 ].join(" ");
 
@@ -213,7 +215,14 @@ async function expandMadlibPrompt({ apiKey, model, madlibText }) {
   };
 }
 
-async function polishSvgPrompt({ apiKey, model, userPrompt, examples = [] }) {
+async function polishSvgPrompt({
+  apiKey,
+  model,
+  userPrompt,
+  examples = [],
+  maxOutputTokens = null,
+  thinkingLevel = "low",
+}) {
   const client = new GoogleGenAI({ apiKey });
   const cleanedExamples = examples
     .map((item) => String(item || "").trim())
@@ -228,6 +237,7 @@ async function polishSvgPrompt({ apiKey, model, userPrompt, examples = [] }) {
   const contents = [
     "Rewrite the following user idea into one polished prompt for animated SVG generation.",
     "Match the tone and structure of the style examples while keeping the same concept.",
+    "Keep the rewritten prompt imaginative and open-ended by default: preserve the core subject and key motion/theme, but avoid specifying colors or exact theme/style details unless the user explicitly requests that level of detail.",
     "",
     "Style examples:",
     formattedExamples,
@@ -243,14 +253,18 @@ async function polishSvgPrompt({ apiKey, model, userPrompt, examples = [] }) {
     responseMimeType: "text/plain",
     systemInstruction: PROMPT_POLISH_SYSTEM_INSTRUCTION,
     temperature: 0.4,
-    maxOutputTokens: 2048,
+    maxOutputTokens:
+      Number.isInteger(maxOutputTokens) && maxOutputTokens > 0 ? maxOutputTokens : 2048,
   };
 
   if (isGemini3Model) {
-    config.thinkingConfig = {
-      thinkingLevel: "low",
-      includeThoughts: false,
-    };
+    const requestedThinkingLevel = String(thinkingLevel || "low").toLowerCase();
+    if (requestedThinkingLevel !== "off") {
+      config.thinkingConfig = {
+        thinkingLevel: requestedThinkingLevel,
+        includeThoughts: false,
+      };
+    }
   }
 
   const requestPayload = {
@@ -300,31 +314,43 @@ async function generateAnimatedSvg({
   apiKey,
   model,
   prompt,
-  width = 1024,
-  height = 1024,
+  width = null,
+  height = null,
   temperature = 1,
+  maxOutputTokens = null,
+  thinkingLevel = "low",
 }) {
   const client = new GoogleGenAI({ apiKey });
   const isGemini3Model = /^gemini-3/i.test(String(model));
+  const normalizedMaxOutputTokens =
+    Number.isInteger(maxOutputTokens) && maxOutputTokens > 0
+      ? maxOutputTokens
+      : isGemini3Model
+        ? 16384
+        : 8192;
+  const normalizedThinkingLevel = String(thinkingLevel || "low").toLowerCase();
   const config = {
     responseMimeType: "text/plain",
     systemInstruction: SYSTEM_INSTRUCTION,
     temperature,
-    maxOutputTokens: isGemini3Model ? 16384 : 8192,
+    maxOutputTokens: normalizedMaxOutputTokens,
   };
 
-  if (isGemini3Model) {
+  if (isGemini3Model && normalizedThinkingLevel !== "off") {
     config.thinkingConfig = {
-      thinkingLevel: "low",
+      thinkingLevel: normalizedThinkingLevel,
       includeThoughts: false,
     };
   }
 
-  const combinedPrompt = [
-    `Canvas target: ${width}x${height}.`,
-    "Create a high-quality animated SVG scene from this prompt:",
-    prompt,
-  ].join("\n\n");
+  const hasCanvasTarget = Number.isFinite(Number(width)) && Number.isFinite(Number(height));
+  const promptParts = [];
+  if (hasCanvasTarget) {
+    promptParts.push(`Canvas target: ${width}x${height}.`);
+  }
+  promptParts.push("Create a high-quality animated SVG scene from this prompt:");
+  promptParts.push(prompt);
+  const combinedPrompt = promptParts.join("\n\n");
   const requestPayload = {
     model,
     contents: combinedPrompt,

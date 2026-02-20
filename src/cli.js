@@ -23,9 +23,9 @@ animated-svgs CLI
 
 Usage:
   node src/cli.js run --prompt "..." [--model ${DEFAULT_GEMINI_MODEL}] [--out-dir runs] [--name demo]
-  node src/cli.js run --prompt-file ./prompt.txt [--no-render]
+  node src/cli.js run --prompt-file ./prompt.txt
   node src/cli.js run --input-svg ./existing.svg [--name local-pass]
-  node src/cli.js qa --input ./file.svg [--out-dir ./qa-out] [--no-render]
+  node src/cli.js qa --input ./file.svg [--out-dir ./qa-out]
   node src/cli.js iterate --config configs/iteration.local.json [--only a,b] [--watch]
   node src/cli.js dashboard --dir runs-lab
   node src/cli.js view --dir runs-lab --port 4173
@@ -35,17 +35,14 @@ Flags:
   --prompt               Prompt text for generation
   --prompt-file          Path to a prompt file
   --model                Gemini model name (default: GEMINI_MODEL or ${DEFAULT_GEMINI_MODEL})
-  --width                Target width (default: 1024)
-  --height               Target height (default: 1024)
-  --temperature          Sampling temperature (default: 0.8)
-  --render               Enable render motion check (default: true)
-  --no-render            Disable render motion check
-  --render-delay-ms      Delay between QA frames (default: 1200)
-  --motion-threshold     Changed pixel ratio threshold (default: 0.002)
+  --width                Optional width hint for generation
+  --height               Optional height hint for generation
+  --temperature          Sampling temperature (default: 1)
   --out-dir              Output directory
   --name                 Name/slug for run artifacts
   --input-svg            Skip Gemini and run pipeline from a local SVG file
   --input                SVG file input for qa mode
+  --report               Optional JSON output path for qa mode
   --config               Iteration JSON config path
   --only                 Comma-separated experiment IDs to run
   --watch                Watch config file and rerun iteration on change
@@ -93,9 +90,6 @@ async function commandRun(flags) {
     width: flagValue(flags, "width"),
     height: flagValue(flags, "height"),
     temperature: flagValue(flags, "temperature"),
-    render: flagValue(flags, "render"),
-    renderDelayMs: flagValue(flags, "renderDelayMs"),
-    motionThreshold: flagValue(flags, "motionThreshold"),
     outDir: flagValue(flags, "outDir"),
     name: flagValue(flags, "name"),
     inputSvg,
@@ -109,8 +103,7 @@ async function commandRun(flags) {
       "Pipeline complete.",
       `Run directory: ${summary.runDir}`,
       `Model: ${summary.modelUsed}`,
-      `Preprocessed QA: ${summary.qa.preprocessed.score} (${summary.qa.preprocessed.grade})`,
-      `Optimized QA: ${summary.qa.optimized.score} (${summary.qa.optimized.grade})`,
+      `QA passed: ${summary.qa.passed} (issues: ${summary.qa.issueCount})`,
     ].join("\n") + "\n",
   );
 }
@@ -118,24 +111,20 @@ async function commandRun(flags) {
 async function commandQa(flags) {
   const options = {
     input: flagValue(flags, "input"),
-    render: flagValue(flags, "render"),
     outDir: flagValue(flags, "outDir"),
-    name: flagValue(flags, "name"),
-    renderDelayMs: flagValue(flags, "renderDelayMs"),
-    motionThreshold: flagValue(flags, "motionThreshold"),
   };
 
   const report = await runQaOnly(options);
-  const output = flagValue(flags, "report") || null;
+  const output =
+    flagValue(flags, "report") ||
+    (options.outDir ? path.join(String(options.outDir), "qa-report.json") : null);
   if (output) {
     const reportPath = path.resolve(process.cwd(), output);
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     process.stdout.write(`QA report written: ${reportPath}\n`);
   }
-  process.stdout.write(
-    `QA score: ${report.summary.score} (${report.summary.grade}), passed=${report.summary.passed}\n`,
-  );
+  process.stdout.write(`QA passed: ${report.summary.passed} (issues: ${report.summary.issueCount})\n`);
 }
 
 async function executeIteration(flags) {
@@ -150,7 +139,7 @@ async function executeIteration(flags) {
     },
     onExperimentDone: async (result) => {
       process.stdout.write(
-        `Finished ${result.id} in ${result.durationMs}ms | optimized QA: ${result.qa.optimized.score} (${result.qa.optimized.grade})\n`,
+        `Finished ${result.id} in ${result.durationMs}ms | QA passed: ${result.qa.passed} (issues: ${result.qa.issueCount})\n`,
       );
     },
   });
