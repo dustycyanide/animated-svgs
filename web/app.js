@@ -78,6 +78,7 @@ const ALLOWED_GENERATION_MODES = new Set(["examples", "custom", "paste"]);
 const THEME_STORAGE_KEY = "animated-svgs-theme";
 const POLISH_TEMPLATE_PLACEHOLDERS = "{{examples}}, {{userPrompt}}";
 const EMPTY_VIEWER_MESSAGE = "No SVG yet. Generate one or paste an SVG to create a new asset.";
+const DISCORD_EXPORT_TIME_HINT = "Export to Discord can take up to 2 minutes.";
 let defaultPolishPromptTemplate = "";
 
 let libraryScope = "created";
@@ -1547,8 +1548,8 @@ async function exportCurrentSvgForDiscord() {
 
   try {
     setLoading(true);
-    setDiscordExportFeedback("");
-    setStatus("Exporting Discord asset...", { isLoadingState: true });
+    setDiscordExportFeedback(`exporting to Discord... ${DISCORD_EXPORT_TIME_HINT.toLowerCase()}`);
+    setStatus(`Exporting to Discord... ${DISCORD_EXPORT_TIME_HINT}`, { isLoadingState: true });
     const presetId = getSelectedDiscordExportPresetId();
     const payload = await fetchJson("/api/discord-export", {
       method: "POST",
@@ -1576,17 +1577,20 @@ async function exportCurrentSvgForDiscord() {
     const summary = limit > 0 ? `${bytesToLabel(bytes)} / ${bytesToLabel(limit)}` : bytesToLabel(bytes);
 
     if (withinLimit) {
-      setDiscordExportFeedback(`downloaded (${summary})`);
-      setStatus(`Discord export ready: ${fileName}.`);
+      setDiscordExportFeedback(`export to Discord downloaded (${summary}). ${DISCORD_EXPORT_TIME_HINT}`);
+      setStatus(`Export to Discord ready: ${fileName}. ${DISCORD_EXPORT_TIME_HINT}`);
     } else {
-      setDiscordExportFeedback(`downloaded (over limit: ${summary})`, { isError: true });
-      setStatus(payload?.output?.warning || "Export downloaded, but it exceeds Discord size limits.", {
+      setDiscordExportFeedback(`export to Discord downloaded (over limit: ${summary}). ${DISCORD_EXPORT_TIME_HINT}`, {
         isError: true,
       });
+      const warning =
+        payload?.output?.warning || "Export to Discord downloaded, but it exceeds Discord size limits.";
+      setStatus(`${warning} ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
     }
   } catch (error) {
-    setDiscordExportFeedback("export failed", { isError: true });
-    setStatus(error.message, { isError: true });
+    const errorMessage = error?.message || "Export to Discord failed.";
+    setDiscordExportFeedback(`export to Discord failed. ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
+    setStatus(`${errorMessage} ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
   } finally {
     setLoading(false);
   }

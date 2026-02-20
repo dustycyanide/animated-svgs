@@ -120,6 +120,6 @@ Output locations:
 
 ## Sample SVGs
 
-![Animated chameleon sample](examples/chameleon.svg)
+![Animated chameleon sample](results/web-created/2026-02-20T03-40-12-737Z-generate-an-svg-of-a-chameleon-sitting-quietly-on-.svg)
 
 ![Animated cardboard box sample](examples/cardboard-box.svg)

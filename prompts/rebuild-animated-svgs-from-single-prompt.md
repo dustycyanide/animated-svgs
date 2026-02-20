@@ -1,33 +1,31 @@
-You are a senior software engineer and autonomous coding agent. Build a local developer tool called "animated-svgs".
+Build a local web application called "animated-svgs".
 
-Important implementation freedom:
-- Do NOT treat this as a source-code copier task.
-- You may choose file names, internal architecture, frameworks, package versions, and module layout.
-- Optimize for equivalent user-facing capabilities and workflows.
-- Keep the system maintainable, testable, and documented.
+Optimize for equivalent user-facing capabilities and workflows, but you have freedom to choose architecture, libraries, file names, and implementation details. The important thing is that it works and is maintainable.
 
 Product intent:
 Build a toolkit for generating animated SVGs with an LLM, sanitizing outputs, running QA checks, and iterating quickly through a local web workbench.
 
 Primary user journeys:
-1) Command-line run: user provides prompt text (or local SVG), gets a saved run folder with artifacts and QA summary.
-2) Command-line QA-only: user passes an SVG file, gets a pass/fail report with issues.
-3) Batch experiments: user runs many prompt/config variants and can inspect a generated dashboard.
-4) Local web workbench: user rapidly generates SVGs from fixed prompts or custom prompts, with prompt polishing and saved output library.
-5) Library curation: user can view, archive/hide, and restore generated SVGs.
-6) Export utility: user can convert an SVG into Discord-friendly animated outputs (emoji/sticker/attachment targets).
+
+1. Web workbench generation: user quickly generates SVGs from fixed prompts or custom prompts, including prompt polishing.
+2. Library curation: user can browse, preview, archive/hide, and restore generated SVGs.
+3. Safety + QA visibility: generated outputs are sanitized and checked, with machine-readable QA data available.
+4. Export utility: user can convert an SVG into Discord-friendly animated outputs (emoji/sticker/attachment targets).
 
 Functional requirements:
 
-A) Generation pipeline
-- Accept prompt text or prompt file input.
-- Support local-only mode where user provides an existing SVG and skips model generation.
-- For model mode:
-  - require an API key from environment variables.
-  - allow model override and generation tuning controls.
-- Save run artifacts (prompt, raw model response, sanitized SVG, QA report, summary metadata) into timestamped run folders.
+A) Web-first generation backend
+
+- Accept generation requests from the web app for:
+  - fixed prompt generation
+  - custom prompt generation
+  - prompt polishing
+- Require API key from environment variables for model calls.
+- Allow model override and generation tuning controls (for example max output tokens and reasoning/thinking level).
+- Save generation artifacts (prompt, raw model response, sanitized SVG, QA report, summary metadata) in timestamped output folders.
 
 B) SVG preprocessing/safety
+
 - Extract a single SVG document from mixed model output text.
 - Remove unsafe/scriptable content at minimum:
   - script tags
@@ -37,34 +35,37 @@ B) SVG preprocessing/safety
 - Preserve useful animation markup where safe.
 
 C) QA engine
+
 - Validate that output is parseable XML/SVG.
 - Check required structure:
   - svg root exists
   - dimensions are resolvable (viewBox or width+height equivalent)
   - animation is present (SMIL and/or CSS animation detection)
 - Detect unsafe patterns and emit clear findings.
-- Return machine-readable report + high-level pass/fail summary.
+- Return machine-readable report and high-level pass/fail summary.
 
 D) Prompt systems
+
 - Support fixed prompt rotation list for fast generation loops.
-- Support optional "mad-lib" style prompt seed expansion workflow.
-- Support "prompt polish" flow:
+- Support optional mad-lib style prompt seed expansion workflow.
+- Support prompt polishing:
   - user enters rough prompt
-  - model rewrites into stronger generation prompt
-  - custom polish template allowed
-  - placeholders equivalent to examples + user prompt are supported and robustly handled
+  - model rewrites to a stronger prompt
+  - custom polish template supported
+  - placeholders equivalent to examples + user prompt are robustly handled
 
 E) Web application UX
-- Local server with two main UI surfaces:
+
+- Local web server with two main UI surfaces:
   - generation workbench
   - saved library/gallery view
 - Workbench capabilities:
   - generate selected fixed prompt
   - move between fixed prompts
-  - generate in parallel for multiple fixed prompts
-  - custom prompt entry + generate
+  - generate multiple prompts in parallel
+  - custom prompt entry and generate
   - polish prompt before generate
-  - advanced generation controls (model, max tokens, reasoning/thinking level)
+  - advanced generation controls
   - save prompt action to append-only log
 - Viewer/library capabilities:
   - preview SVGs
@@ -74,58 +75,69 @@ E) Web application UX
   - Discord export action with selectable preset target
 
 F) Library persistence/seeding
+
 - Maintain created vs archived scopes (or equivalent).
 - On first launch, seed library from bundled example SVGs.
-- Seeding must happen once only, with a persistent marker so restarts do not re-seed.
+- Seeding must happen once only, with a persistent marker so restarts do not reseed.
 - If library is emptied after marker exists, do not auto-reseed.
 
 G) Discord export feature
+
 - Offer multiple presets equivalent to:
   - regular attachment
   - emoji (webp)
   - emoji (gif)
   - sticker
 - Enforce size/format constraints by preset.
-- Produce data consumable by the web UI (e.g., base64 payload + metadata).
-- Include dimension parsing/fallback logic for SVG inputs.
+- Produce data consumable by the web UI (for example base64 payload plus metadata).
+- Include dimension parsing and fallback logic for SVG inputs.
 
-H) Iteration + dashboard + viewer server
-- Batch runner reads experiment configuration and executes selected experiments.
-- Support filtering experiments and a watch/re-run workflow.
-- Emit an iteration report.
-- Generate a browsable dashboard that lists runs, QA outcomes, and links to artifacts.
-- Provide a local viewer server for the dashboard and run files.
+H) Web routes and API surface
 
-I) CLI surface
-- Provide clear commands for:
-  - generate/run pipeline
-  - qa-only
-  - iteration
-  - dashboard generation
-  - local viewer server
-  - API key check
-- CLI output must be user-readable and include run locations and QA result summaries.
+- Provide routes for:
+  - main library/gallery
+  - generation workbench
+- Provide JSON endpoints for:
+  - prompt selection/listing
+  - generation
+  - prompt polishing
+  - library list/item retrieval
+  - archive/hide and unarchive/restore
+  - discord export presets and export action
+- Return clear, consistent error payloads for UI handling.
 
-J) Documentation
+I) Documentation
+
 - README must cover:
   - what the tool does
   - setup/prereqs
-  - how to run CLI flows
-  - how to use web flows
+  - web app usage flows
+  - environment variables and API key setup
   - where artifacts are written
 - AGENTS.md (or equivalent contributor guide) must describe architecture and operator workflows.
 
-K) Testing
+J) Testing
+
 - Include automated tests for critical behavior:
-  - end-to-end local-input pipeline artifact creation
   - sanitizer removals of unsafe SVG patterns
-  - prompt polish template placeholder handling
+  - prompt polish placeholder handling
   - export preset and dimension parsing behavior
   - one-time seed behavior across server restarts
+  - integration checks for core web API routes
 
 Execution protocol (required):
 
-1) Temporary setup-tracking section
+0. Early scaffolding and folder READMEs
+
+- In the first implementation phase, scaffold the high-level project folders early.
+- For each major folder, create a local README.md that explains:
+  - what belongs there
+  - expected modules/files
+  - key responsibilities and boundaries
+- Keep those folder READMEs aligned as implementation evolves.
+
+1. Temporary setup-tracking section
+
 - Add a temporary section in AGENTS.md named exactly:
   - `## Agent Setup Progress (Temporary)`
 - Track:
@@ -136,7 +148,8 @@ Execution protocol (required):
   - `Next action for user: ...`
 - Update this section at each phase boundary.
 
-2) Phase files for large work
+2. Phase files for large work
+
 - If implementation cannot be finished cleanly in one pass, create phase docs under `plans/` (or similar).
 - Each phase doc must include:
   - objective
@@ -145,32 +158,34 @@ Execution protocol (required):
   - exit criteria
   - final line: `Next action for user: ...`
 
-3) Self-cleanup
+3. Self-cleanup
+
 - After full completion and validations:
   - remove `## Agent Setup Progress (Temporary)` entirely from AGENTS.md.
   - leave only stable, long-term project documentation.
 
-4) Validation before finish
-- Install dependencies.
-- Run test suite and any essential smoke checks.
-- If anything cannot run, report exact blocker and remaining work.
+4. Validation before finish
 
-5) Final user handoff (required)
-- End with a short "Run these commands now" section for the user.
-- Include exact commands based on what you implemented, covering at minimum:
+- Install dependencies.
+- Run the test suite and essential web smoke checks.
+- If anything cannot run, report exact blockers and remaining work.
+
+5. Final user handoff (required)
+
+- End with a short "Run these commands now" section.
+- Include exact commands based on your implementation, covering at minimum:
   - dependency install
   - environment setup
-  - API key validation
-  - one pipeline run
-  - one QA run
+  - API key validation check
   - web app launch
   - tests
 - The handoff must explicitly instruct:
   - create `.env` from `.env.example` (or equivalent)
-  - add Gemini API key to `.env` using `GEMINI_API_KEY` (preferred) or `GOOGLE_API_KEY`
+  - add Gemini API key in `.env` using `GEMINI_API_KEY` (preferred) or `GOOGLE_API_KEY`
 
 Definition of done:
-- The application is functionally complete for the flows above.
+
+- The web application is functionally complete for the flows above.
 - Tests pass (or failures are explicitly explained with root cause).
 - Documentation is accurate.
 - Temporary AGENTS setup section has been removed.

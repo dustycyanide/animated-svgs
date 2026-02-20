@@ -7,15 +7,18 @@ const includeHiddenToggle = document.getElementById("include-hidden-toggle");
 const cutModeSelect = document.getElementById("grid-cut-mode-select");
 const cutRatioInput = document.getElementById("grid-cut-ratio-input");
 const themeSelect = document.getElementById("grid-theme-select");
+const discordExportPresetSelect = document.getElementById("grid-discord-export-preset");
 
 const detailPanelEl = document.getElementById("svg-detail-panel");
 const detailTitleEl = document.getElementById("detail-title");
 const detailSubEl = document.getElementById("detail-sub");
 const detailBackButton = document.getElementById("detail-back-btn");
 const detailCopyButton = document.getElementById("detail-copy-btn");
+const detailDiscordExportButton = document.getElementById("detail-discord-export-btn");
 const detailDownloadLink = document.getElementById("detail-download-link");
 const detailRawLink = document.getElementById("detail-raw-link");
 const detailCopyFeedbackEl = document.getElementById("detail-copy-feedback");
+const detailDiscordExportFeedbackEl = document.getElementById("detail-discord-export-feedback");
 const detailViewerStageEl = document.getElementById("detail-viewer-stage");
 const detailViewerEl = document.getElementById("detail-viewer");
 const detailEmptyEl = document.getElementById("detail-empty");
@@ -23,6 +26,7 @@ const detailEmptyEl = document.getElementById("detail-empty");
 const ALLOWED_CUT_MODES = new Set(["original", "square", "circle", "ratio"]);
 const ALLOWED_SCOPES = new Set(["created", "archived"]);
 const THEME_STORAGE_KEY = "animated-svgs-theme";
+const DISCORD_EXPORT_TIME_HINT = "Export to Discord can take up to 2 minutes.";
 
 let allLibraryItems = [];
 let gridSummary = {
@@ -33,6 +37,8 @@ let gridSummary = {
 };
 let currentDetail = null;
 let detailRequestToken = 0;
+let discordExportPresets = [];
+let isExportingDiscord = false;
 
 function setStatus(message, { isError = false } = {}) {
   statusEl.textContent = message;
@@ -65,6 +71,71 @@ async function fetchJson(url, options = {}) {
     throw new Error(payload.error || "Request failed.");
   }
   return payload;
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 120000) {
+  const controller = new AbortController();
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120000;
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    return await fetchJson(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      const seconds = Math.round(timeout / 1000);
+      throw new Error(`Request timed out after ${seconds}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function getDefaultDiscordExportPresets() {
+  return [
+    { id: "attachment-webp", label: "Chat Attachment (Animated WebP)", sizeLimitBytes: 10 * 1024 * 1024 },
+    { id: "emoji-webp", label: "Server Emoji (Animated WebP)", sizeLimitBytes: 256 * 1024 },
+    { id: "emoji-gif", label: "Server Emoji (GIF)", sizeLimitBytes: 256 * 1024 },
+    { id: "sticker-apng", label: "Sticker (APNG)", sizeLimitBytes: 512 * 1024 },
+  ];
+}
+
+function bytesToLabel(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) {
+    return "0 B";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function base64ToBlob(base64, mimeType) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType || "application/octet-stream" });
+}
+
+function downloadBlob(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 function normalizeTheme(rawTheme) {
@@ -127,6 +198,66 @@ function normalizeScope(rawScope) {
     return "created";
   }
   return scope;
+}
+
+function renderDiscordExportPresetOptions() {
+  if (!discordExportPresetSelect) {
+    return;
+  }
+  discordExportPresetSelect.innerHTML = "";
+  for (const preset of discordExportPresets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    discordExportPresetSelect.appendChild(option);
+  }
+}
+
+function getSelectedDiscordExportPresetId() {
+  const selectedId = String(discordExportPresetSelect?.value || "").trim();
+  if (!selectedId) {
+    return "attachment-webp";
+  }
+  return selectedId;
+}
+
+function setDetailDiscordExportFeedback(message = "", { isError = false } = {}) {
+  if (!detailDiscordExportFeedbackEl) {
+    return;
+  }
+  detailDiscordExportFeedbackEl.textContent = message;
+  detailDiscordExportFeedbackEl.classList.toggle("error", isError);
+}
+
+function refreshDiscordExportControlStates() {
+  const hasPresets = discordExportPresets.length > 0;
+  if (discordExportPresetSelect) {
+    discordExportPresetSelect.disabled = isExportingDiscord || !hasPresets;
+  }
+  if (detailDiscordExportButton) {
+    detailDiscordExportButton.disabled = isExportingDiscord || !hasPresets || !currentDetail?.svg;
+  }
+  for (const exportButton of document.querySelectorAll(".card-export-discord-btn")) {
+    exportButton.disabled = isExportingDiscord || !hasPresets;
+  }
+}
+
+function setDiscordExportLoading(nextLoading) {
+  isExportingDiscord = Boolean(nextLoading);
+  refreshDiscordExportControlStates();
+}
+
+async function loadDiscordExportPresets() {
+  const fallbackPresets = getDefaultDiscordExportPresets();
+  try {
+    const payload = await fetchJson("/api/discord-export/presets");
+    const serverPresets = Array.isArray(payload?.presets) ? payload.presets : [];
+    discordExportPresets = serverPresets.length > 0 ? serverPresets : fallbackPresets;
+  } catch {
+    discordExportPresets = fallbackPresets;
+  }
+  renderDiscordExportPresetOptions();
+  refreshDiscordExportControlStates();
 }
 
 function applyCutClass(targetEl, mode, ratio) {
@@ -331,6 +462,9 @@ function clearDetailUi() {
   if (detailCopyButton) {
     detailCopyButton.disabled = true;
   }
+  if (detailDiscordExportButton) {
+    detailDiscordExportButton.disabled = true;
+  }
   if (detailDownloadLink) {
     detailDownloadLink.href = "#";
     detailDownloadLink.removeAttribute("download");
@@ -339,6 +473,8 @@ function clearDetailUi() {
     detailRawLink.href = "#";
   }
   setDetailCopyFeedback("");
+  setDetailDiscordExportFeedback("");
+  refreshDiscordExportControlStates();
 }
 
 function closeDetail({ syncUrl = true, pushUrl = false, preserveStatus = false } = {}) {
@@ -350,6 +486,7 @@ function closeDetail({ syncUrl = true, pushUrl = false, preserveStatus = false }
     syncUrlState({ push: pushUrl });
   }
   renderGrid(allLibraryItems);
+  refreshDiscordExportControlStates();
   if (!preserveStatus) {
     renderGridStatus();
   }
@@ -378,6 +515,7 @@ function renderGrid(items) {
     empty.appendChild(actions);
     gridEl.appendChild(empty);
     gridEl.appendChild(createGenerateCard());
+    refreshDiscordExportControlStates();
     return;
   }
 
@@ -426,7 +564,20 @@ function renderGrid(items) {
     rawLink.href = `/api/library/file?scope=${encodeURIComponent(item.scope)}&name=${encodeURIComponent(item.name)}`;
     rawLink.textContent = "Raw";
 
+    const exportButton = document.createElement("button");
+    exportButton.type = "button";
+    exportButton.className = "btn btn-ghost card-export-discord-btn";
+    exportButton.textContent = "Export to Discord";
+    exportButton.disabled = isExportingDiscord || discordExportPresets.length === 0;
+    exportButton.addEventListener("click", () => {
+      exportLibraryItemForDiscord({
+        scope: item.scope,
+        name: item.name,
+      });
+    });
+
     actions.appendChild(openButton);
+    actions.appendChild(exportButton);
     actions.appendChild(rawLink);
     body.appendChild(title);
     body.appendChild(sub);
@@ -437,6 +588,7 @@ function renderGrid(items) {
   }
 
   gridEl.appendChild(createGenerateCard());
+  refreshDiscordExportControlStates();
 }
 
 async function loadGrid() {
@@ -503,6 +655,9 @@ async function openDetail({ scope, name, syncUrl = true, pushUrl = true } = {}) 
   if (detailCopyButton) {
     detailCopyButton.disabled = true;
   }
+  if (detailDiscordExportButton) {
+    detailDiscordExportButton.disabled = true;
+  }
   if (detailDownloadLink) {
     detailDownloadLink.href = "#";
     detailDownloadLink.removeAttribute("download");
@@ -510,6 +665,7 @@ async function openDetail({ scope, name, syncUrl = true, pushUrl = true } = {}) 
   if (detailRawLink) {
     detailRawLink.href = "#";
   }
+  setDetailDiscordExportFeedback("");
 
   try {
     const payload = await fetchJson(
@@ -555,6 +711,7 @@ async function openDetail({ scope, name, syncUrl = true, pushUrl = true } = {}) 
     if (detailCopyButton) {
       detailCopyButton.disabled = !currentDetail.svg;
     }
+    refreshDiscordExportControlStates();
     applyGridCutMode();
     renderGrid(allLibraryItems);
     renderGridStatus();
@@ -600,6 +757,130 @@ async function copyCurrentSvg() {
   } catch (error) {
     setDetailCopyFeedback(error.message || "Unable to copy SVG.", { isError: true });
   }
+}
+
+async function runDiscordExport({ svg, sourceName, setFeedback } = {}) {
+  if (isExportingDiscord) {
+    setStatus(`Export to Discord already in progress. ${DISCORD_EXPORT_TIME_HINT}`);
+    return;
+  }
+  const svgMarkup = String(svg || "").trim();
+  if (!svgMarkup) {
+    setStatus("Missing SVG markup to export to Discord.", { isError: true });
+    if (typeof setFeedback === "function") {
+      setFeedback(`export to Discord failed. ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
+    }
+    return;
+  }
+
+  try {
+    setDiscordExportLoading(true);
+    if (typeof setFeedback === "function") {
+      setFeedback(`exporting to Discord... ${DISCORD_EXPORT_TIME_HINT.toLowerCase()}`);
+    }
+    setStatus(`Exporting to Discord... ${DISCORD_EXPORT_TIME_HINT}`);
+
+    const payload = await fetchJsonWithTimeout(
+      "/api/discord-export",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          presetId: getSelectedDiscordExportPresetId(),
+          sourceName: sourceName || "animated-svg.svg",
+          svg: svgMarkup,
+        }),
+      },
+      180000,
+    );
+
+    const base64 = payload?.output?.base64;
+    const mimeType = payload?.output?.mimeType;
+    const fileName = payload?.output?.fileName || "discord-export.bin";
+    if (typeof base64 !== "string" || base64.length === 0) {
+      throw new Error("Export completed but no downloadable file was returned.");
+    }
+
+    const blob = base64ToBlob(base64, mimeType);
+    downloadBlob(blob, fileName);
+
+    const bytes = Number(payload?.output?.bytes) || blob.size;
+    const limit = Number(payload?.preset?.sizeLimitBytes) || 0;
+    const withinLimit = payload?.output?.meetsDiscordLimit !== false;
+    const summary = limit > 0 ? `${bytesToLabel(bytes)} / ${bytesToLabel(limit)}` : bytesToLabel(bytes);
+
+    if (withinLimit) {
+      if (typeof setFeedback === "function") {
+        setFeedback(`export to Discord downloaded (${summary}). ${DISCORD_EXPORT_TIME_HINT}`);
+      }
+      setStatus(`Export to Discord ready: ${fileName}. ${DISCORD_EXPORT_TIME_HINT}`);
+    } else {
+      if (typeof setFeedback === "function") {
+        setFeedback(`export to Discord downloaded (over limit: ${summary}). ${DISCORD_EXPORT_TIME_HINT}`, {
+          isError: true,
+        });
+      }
+      const warning = payload?.output?.warning || "Export to Discord downloaded, but it exceeds Discord size limits.";
+      setStatus(`${warning} ${DISCORD_EXPORT_TIME_HINT}`, {
+        isError: true,
+      });
+    }
+  } catch (error) {
+    if (typeof setFeedback === "function") {
+      const message = /timed out/i.test(String(error?.message || ""))
+        ? `export to Discord timed out. ${DISCORD_EXPORT_TIME_HINT}`
+        : `export to Discord failed. ${DISCORD_EXPORT_TIME_HINT}`;
+      setFeedback(message, { isError: true });
+    }
+    const errorMessage = error?.message || "Export to Discord failed.";
+    setStatus(`${errorMessage} ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
+  } finally {
+    setDiscordExportLoading(false);
+  }
+}
+
+async function exportLibraryItemForDiscord({ scope, name } = {}) {
+  const itemName = String(name || "").trim();
+  if (!itemName) {
+    return;
+  }
+  const activeScope = normalizeScope(scope);
+  if (currentDetail && currentDetail.scope === activeScope && currentDetail.name === itemName && currentDetail.svg) {
+    await runDiscordExport({
+      svg: currentDetail.svg,
+      sourceName: itemName,
+      setFeedback: setDetailDiscordExportFeedback,
+    });
+    return;
+  }
+
+  try {
+    setStatus(`Preparing ${itemName} to export to Discord... ${DISCORD_EXPORT_TIME_HINT}`);
+    const payload = await fetchJsonWithTimeout(
+      `/api/library/item?scope=${encodeURIComponent(activeScope)}&name=${encodeURIComponent(itemName)}`,
+      {},
+      45000,
+    );
+    await runDiscordExport({
+      svg: typeof payload.svg === "string" ? payload.svg : "",
+      sourceName: payload.name || itemName,
+    });
+  } catch (error) {
+    const errorMessage = error?.message || "Unable to load SVG to export to Discord.";
+    setStatus(`${errorMessage} ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
+  }
+}
+
+async function exportCurrentDetailForDiscord() {
+  if (!currentDetail?.svg) {
+    setStatus(`Open an SVG first to export to Discord. ${DISCORD_EXPORT_TIME_HINT}`, { isError: true });
+    return;
+  }
+  await runDiscordExport({
+    svg: currentDetail.svg,
+    sourceName: currentDetail.name || "animated-svg.svg",
+    setFeedback: setDetailDiscordExportFeedback,
+  });
 }
 
 async function applyDetailStateFromUrl() {
@@ -662,6 +943,14 @@ if (detailBackButton) {
 if (detailCopyButton) {
   detailCopyButton.addEventListener("click", copyCurrentSvg);
 }
+if (detailDiscordExportButton) {
+  detailDiscordExportButton.addEventListener("click", exportCurrentDetailForDiscord);
+}
+if (discordExportPresetSelect) {
+  discordExportPresetSelect.addEventListener("change", () => {
+    setDetailDiscordExportFeedback("");
+  });
+}
 
 window.addEventListener("popstate", () => {
   applyCutSettingsFromUrl();
@@ -672,6 +961,9 @@ window.addEventListener("popstate", () => {
 loadThemePreference();
 applyCutSettingsFromUrl();
 applyGridCutMode();
+loadDiscordExportPresets().catch(() => {
+  refreshDiscordExportControlStates();
+});
 
 loadGrid().then(() => {
   applyDetailStateFromUrl();
