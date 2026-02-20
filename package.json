@@ -1,0 +1,31 @@
+{
+  "name": "animated-svgs",
+  "version": "1.0.0",
+  "description": "Local pipeline for generating and QA-ing animated SVGs",
+  "main": "src/cli.js",
+  "scripts": {
+    "check:key": "node src/check-gemini-key.js",
+    "web": "node src/web-server.js",
+    "pipeline": "node src/cli.js run",
+    "pipeline:sword": "node src/cli.js run --prompt-file prompts/sword-swing.txt --name sword-swing",
+    "qa": "node src/cli.js qa",
+    "iterate": "node src/cli.js iterate",
+    "dashboard": "node src/cli.js dashboard",
+    "view": "node src/cli.js view",
+    "test:e2e": "node --test test/e2e.test.js",
+    "probe:gemini": "node scripts/probe-gemini-response.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^1.42.0",
+    "dotenv": "^17.3.1",
+    "fast-xml-parser": "^5.3.6",
+    "pixelmatch": "^7.1.0",
+    "playwright": "^1.58.2",
+    "pngjs": "^7.0.0",
+    "svgo": "^4.0.0"
+  }
+}
