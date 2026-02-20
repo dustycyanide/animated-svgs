@@ -49,6 +49,33 @@
 
       <div id="grid-status" class="status">Loading library grid...</div>
       <div id="grid-meta" class="meta"></div>
+      <section id="svg-detail-panel" class="panel viewer-card" aria-label="Selected SVG preview" hidden>
+        <div class="detail-head">
+          <div class="panel-head panel-head-tight">
+            <h2 id="detail-title">Selected SVG</h2>
+            <p id="detail-sub">Open an item from the grid to inspect it here.</p>
+          </div>
+          <div class="detail-actions">
+            <button id="detail-back-btn" class="btn btn-secondary" type="button">Back to Grid</button>
+            <button id="detail-copy-btn" class="btn btn-ghost" type="button" disabled>Copy SVG</button>
+            <a id="detail-download-link" class="btn btn-primary" href="#" download>Download SVG</a>
+            <a
+              id="detail-raw-link"
+              class="btn btn-ghost"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Raw
+            </a>
+          </div>
+        </div>
+        <div id="detail-copy-feedback" class="detail-copy-feedback" aria-live="polite"></div>
+        <div id="detail-viewer-stage" class="viewer-stage">
+          <object id="detail-viewer" class="viewer" type="image/svg+xml" aria-label="Animated SVG preview"></object>
+          <div id="detail-empty" class="viewer-empty">Loading SVG preview...</div>
+        </div>
+      </section>
       <section id="svg-grid" class="svg-grid" aria-label="Saved SVG grid"></section>
 
       <a href="/generate" class="fab-generate" aria-label="Generate a new SVG">

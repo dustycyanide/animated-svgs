@@ -217,6 +217,31 @@ h1 {
   margin-bottom: 10px;
 }
 
+.mode-shortcut {
+  margin-bottom: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  padding: 10px 11px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mode-shortcut p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.mode-shortcut strong {
+  color: var(--ink-strong);
+  margin-right: 6px;
+}
+
 .generation-mode-control {
   min-width: 220px;
   max-width: 320px;
@@ -478,6 +503,16 @@ kbd {
   margin: 0 0 10px;
 }
 
+.paste-svg-input {
+  min-height: 190px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
+  font-size: 0.85rem;
+}
+
+.paste-label-input {
+  margin-bottom: 10px;
+}
+
 .status-panel {
   border-left: 6px solid var(--accent);
 }
@@ -583,6 +618,24 @@ kbd {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.discord-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.discord-export-control {
+  min-width: 240px;
+  flex: 1 1 260px;
+}
+
+.discord-export-control .select-input {
+  min-width: 0;
+  width: 100%;
 }
 
 .viewer-copy-feedback {
@@ -731,6 +784,13 @@ kbd {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.library-action-select {
+  min-width: 108px;
+  font-size: 0.78rem;
+  padding: 6px 26px 6px 9px;
+  border-radius: 9px;
 }
 
 .btn-mini {
@@ -905,7 +965,8 @@ kbd {
   }
 
   .cut-controls .inline-control,
-  .cut-ratio-control {
+  .cut-ratio-control,
+  .discord-export-control {
     min-width: 0;
     width: 100%;
   }

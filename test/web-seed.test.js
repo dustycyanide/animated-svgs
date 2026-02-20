@@ -51,6 +51,43 @@ async function getJson(url) {
   });
 }
 
+async function postJson(url, body) {
+  return new Promise((resolve, reject) => {
+    const rawBody = `${JSON.stringify(body || {})}`;
+    const request = http.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(rawBody),
+        },
+      },
+      (response) => {
+        let raw = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          raw += chunk;
+        });
+        response.on("end", () => {
+          try {
+            const payload = raw.trim() ? JSON.parse(raw) : {};
+            resolve({
+              statusCode: response.statusCode || 0,
+              payload,
+            });
+          } catch (error) {
+            reject(error);
+          }
+        });
+      },
+    );
+    request.on("error", reject);
+    request.write(rawBody);
+    request.end();
+  });
+}
+
 async function waitForServer(url, child, { timeoutMs = 10000 } = {}) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -129,6 +166,59 @@ async function listCreatedLibrary(port) {
   assert.equal(statusCode, 200);
   return payload;
 }
+
+test(
+  "library delete endpoint removes the SVG and metadata",
+  { timeout: 30000 },
+  async () => {
+    const projectRoot = path.resolve(__dirname, "..");
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "animated-svgs-web-delete-"));
+    const examplesDir = path.join(tmpRoot, "examples");
+    const createdDir = path.join(tmpRoot, "results", "web-created");
+    let server;
+
+    await fs.mkdir(examplesDir, { recursive: true });
+    await fs.writeFile(
+      path.join(examplesDir, "delete-me.svg"),
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#ef4444" /></svg>\n',
+      "utf8",
+    );
+
+    try {
+      server = await startWebServer({ projectRoot, cwd: tmpRoot });
+      const initial = await listCreatedLibrary(server.port);
+      assert.equal(initial.items.length, 1);
+      const target = initial.items[0];
+      assert.equal(typeof target.name, "string");
+
+      const deleteResponse = await postJson(`http://127.0.0.1:${server.port}/api/library/delete`, {
+        name: target.name,
+        scope: "created",
+      });
+      assert.equal(deleteResponse.statusCode, 200);
+      assert.equal(deleteResponse.payload.ok, true);
+      assert.equal(deleteResponse.payload.deleted.name, target.name);
+      assert.equal(deleteResponse.payload.deleted.scope, "created");
+
+      const afterDelete = await listCreatedLibrary(server.port);
+      assert.equal(afterDelete.items.length, 0);
+
+      await assert.rejects(fs.access(path.join(createdDir, target.name)));
+      await assert.rejects(
+        fs.access(path.join(createdDir, `${path.basename(target.name, ".svg")}.json`)),
+      );
+
+      const deleteMissing = await postJson(`http://127.0.0.1:${server.port}/api/library/delete`, {
+        name: target.name,
+        scope: "created",
+      });
+      assert.equal(deleteMissing.statusCode, 404);
+    } finally {
+      await stopWebServer(server ? server.child : null);
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "web starter examples are seeded once and are not restored after deletion",

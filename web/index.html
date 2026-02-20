@@ -37,12 +37,17 @@
             </div>
             <div class="generation-mode-row">
               <label class="inline-control generation-mode-control" for="generation-mode-select">
-                <span>Prompt Mode</span>
+                <span>Generation Mode</span>
                 <select id="generation-mode-select" class="select-input">
                   <option value="examples" selected>Examples</option>
                   <option value="custom">Custom</option>
+                  <option value="paste">Paste SVG</option>
                 </select>
               </label>
+            </div>
+            <div class="mode-shortcut" role="note" aria-label="Import existing SVG markup">
+              <p><strong>Import Existing SVG</strong> Paste SVG markup and save it directly to Created SVGs.</p>
+              <button id="open-paste-mode-btn" class="btn btn-secondary" type="button">Paste SVG</button>
             </div>
             <div id="fixed-controls-block" class="mode-controls">
               <div class="actions prompt-actions">
@@ -75,6 +80,27 @@
               <p class="hint">
                 Polish rewrites your prompt using fixed examples as style references. Shortcut:
                 <kbd>Ctrl/Cmd + Enter</kbd> generate custom.
+              </p>
+            </div>
+            <div id="paste-controls-block" class="mode-controls" hidden>
+              <textarea
+                id="paste-svg-input"
+                class="custom-input paste-svg-input"
+                placeholder="<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 512 512&quot;>...</svg>"
+              ></textarea>
+              <input
+                id="paste-label-input"
+                class="text-input paste-label-input"
+                type="text"
+                placeholder="Optional title for this imported SVG"
+              />
+              <div class="actions">
+                <button id="create-from-svg-btn" class="btn btn-primary" type="button">Create From Pasted SVG</button>
+              </div>
+              <div id="paste-meta" class="meta-line"></div>
+              <p class="hint">
+                Paste complete SVG markup, then create a new asset directly from it. Shortcut:
+                <kbd>Ctrl/Cmd + Enter</kbd> create from pasted SVG.
               </p>
             </div>
             <details id="advanced-generation-details" class="config-details">
@@ -191,9 +217,19 @@
               <button id="copy-svg-btn" class="btn btn-ghost btn-mini" type="button" disabled>copy</button>
               <span id="copy-svg-feedback" class="viewer-copy-feedback" aria-live="polite"></span>
             </div>
+            <div class="discord-export">
+              <label class="inline-control discord-export-control" for="discord-export-preset">
+                <span>Discord Export</span>
+                <select id="discord-export-preset" class="select-input"></select>
+              </label>
+              <button id="discord-export-btn" class="btn btn-secondary btn-mini" type="button" disabled>
+                Export for Discord
+              </button>
+              <span id="discord-export-feedback" class="viewer-copy-feedback" aria-live="polite"></span>
+            </div>
             <div class="viewer-stage">
               <object id="svg-viewer" class="viewer" type="image/svg+xml" aria-label="Animated SVG preview"></object>
-              <div id="viewer-empty" class="viewer-empty">No SVG yet. Select a prompt and generate.</div>
+              <div id="viewer-empty" class="viewer-empty">No SVG yet. Generate one or paste an SVG to create a new asset.</div>
             </div>
           </section>
 

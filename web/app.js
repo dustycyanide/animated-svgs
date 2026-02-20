@@ -8,7 +8,9 @@ const saveButton = document.getElementById("save-btn");
 const copyButton = document.getElementById("copy-btn");
 const polishButton = document.getElementById("polish-btn");
 const generateCustomButton = document.getElementById("generate-custom-btn");
+const createFromSvgButton = document.getElementById("create-from-svg-btn");
 const useCurrentButton = document.getElementById("use-current-btn");
+const openPasteModeButton = document.getElementById("open-paste-mode-btn");
 const modelInput = document.getElementById("model-input");
 const maxTokensInput = document.getElementById("max-tokens-input");
 const reasoningLevelSelect = document.getElementById("reasoning-level-select");
@@ -17,7 +19,10 @@ const resetPolishTemplateButton = document.getElementById("reset-polish-template
 const refreshLibraryButton = document.getElementById("refresh-library-btn");
 const showHiddenToggle = document.getElementById("show-hidden-toggle");
 const customPromptInput = document.getElementById("custom-prompt-input");
+const pasteSvgInput = document.getElementById("paste-svg-input");
+const pasteLabelInput = document.getElementById("paste-label-input");
 const customMetaEl = document.getElementById("custom-meta");
+const pasteMetaEl = document.getElementById("paste-meta");
 const statusEl = document.getElementById("status");
 const promptEl = document.getElementById("prompt");
 const categoryEl = document.getElementById("category");
@@ -27,6 +32,9 @@ const viewerEmptyEl = document.getElementById("viewer-empty");
 const viewerStageEl = viewerEl ? viewerEl.parentElement : null;
 const copySvgButton = document.getElementById("copy-svg-btn");
 const copySvgFeedbackEl = document.getElementById("copy-svg-feedback");
+const discordExportPresetSelect = document.getElementById("discord-export-preset");
+const discordExportButton = document.getElementById("discord-export-btn");
+const discordExportFeedbackEl = document.getElementById("discord-export-feedback");
 const modelDetailsEl = document.getElementById("model-details");
 const modelSummaryEl = document.getElementById("model-summary");
 const modelResponseEl = document.getElementById("model-response");
@@ -45,6 +53,7 @@ const themeSelect = document.getElementById("theme-select");
 const generationModeSelect = document.getElementById("generation-mode-select");
 const fixedControlsBlock = document.getElementById("fixed-controls-block");
 const customControlsBlock = document.getElementById("custom-controls-block");
+const pasteControlsBlock = document.getElementById("paste-controls-block");
 const cutRatioControlEl = cutRatioInput?.closest(".cut-ratio-control");
 
 let currentPrompt = "";
@@ -65,9 +74,10 @@ const DEFAULT_MODEL = "gemini-3.1-pro-preview";
 const DEFAULT_MAX_OUTPUT_TOKENS = 16384;
 const ALLOWED_REASONING_LEVELS = new Set(["off", "low", "medium", "high"]);
 const ALLOWED_CUT_MODES = new Set(["original", "square", "circle", "ratio"]);
-const ALLOWED_GENERATION_MODES = new Set(["examples", "custom"]);
+const ALLOWED_GENERATION_MODES = new Set(["examples", "custom", "paste"]);
 const THEME_STORAGE_KEY = "animated-svgs-theme";
 const POLISH_TEMPLATE_PLACEHOLDERS = "{{examples}}, {{userPrompt}}";
+const EMPTY_VIEWER_MESSAGE = "No SVG yet. Generate one or paste an SVG to create a new asset.";
 let defaultPolishPromptTemplate = "";
 
 let libraryScope = "created";
@@ -78,6 +88,7 @@ let selectedFixedPromptIndex = null;
 let parallelResultItems = [];
 let carouselItems = [];
 let carouselIndex = null;
+let discordExportPresets = [];
 
 let isLoading = false;
 let isLibraryLoading = false;
@@ -92,8 +103,23 @@ function getCustomPromptValue() {
   return String(customPromptInput.value || "").trim();
 }
 
+function getPastedSvgValue() {
+  return String(pasteSvgInput?.value || "").trim();
+}
+
+function getPastedLabelValue() {
+  return String(pasteLabelInput?.value || "").trim();
+}
+
 function setCustomMeta(message = "") {
   customMetaEl.textContent = message;
+}
+
+function setPasteMeta(message = "") {
+  if (!pasteMetaEl) {
+    return;
+  }
+  pasteMetaEl.textContent = message;
 }
 
 function setCopySvgFeedback(message = "", { isError = false } = {}) {
@@ -102,6 +128,14 @@ function setCopySvgFeedback(message = "", { isError = false } = {}) {
   }
   copySvgFeedbackEl.textContent = message;
   copySvgFeedbackEl.classList.toggle("error", isError);
+}
+
+function setDiscordExportFeedback(message = "", { isError = false } = {}) {
+  if (!discordExportFeedbackEl) {
+    return;
+  }
+  discordExportFeedbackEl.textContent = message;
+  discordExportFeedbackEl.classList.toggle("error", isError);
 }
 
 function getSelectedModel() {
@@ -200,6 +234,9 @@ function applyGenerationMode(mode) {
   if (customControlsBlock) {
     customControlsBlock.hidden = generationMode !== "custom";
   }
+  if (pasteControlsBlock) {
+    pasteControlsBlock.hidden = generationMode !== "paste";
+  }
   refreshControlStates();
 }
 
@@ -276,7 +313,6 @@ function applyCutMode() {
 
   if (cutRatioInput) {
     const showRatioControl = mode === "ratio";
-    cutRatioInput.disabled = !showRatioControl;
     if (cutRatioControlEl) {
       cutRatioControlEl.hidden = !showRatioControl;
     }
@@ -287,10 +323,12 @@ function refreshControlStates() {
   const hasCurrentPrompt = Boolean(currentPrompt);
   const hasCurrentSvg = Boolean(currentSvgText);
   const hasCustomPrompt = Boolean(getCustomPromptValue());
+  const hasPastedSvg = Boolean(getPastedSvgValue());
   const hasFixedPrompt = fixedPrompts.length > 0 && Number.isInteger(selectedFixedPromptIndex);
   const canGenerateSelected = fixedPrompts.length === 0 || hasCurrentPrompt;
   const isExamplesMode = generationMode === "examples";
   const isCustomMode = generationMode === "custom";
+  const isPasteMode = generationMode === "paste";
 
   nextButton.disabled = isLoading || !canGenerateSelected || !isExamplesMode;
   prevPromptButton.disabled = isLoading || !hasFixedPrompt || !isExamplesMode;
@@ -303,10 +341,28 @@ function refreshControlStates() {
   if (copySvgButton) {
     copySvgButton.disabled = isLoading || !hasCurrentSvg;
   }
+  if (discordExportPresetSelect) {
+    discordExportPresetSelect.disabled = isLoading || discordExportPresets.length === 0;
+  }
+  if (discordExportButton) {
+    discordExportButton.disabled = isLoading || !hasCurrentSvg || discordExportPresets.length === 0;
+  }
   useCurrentButton.disabled = isLoading || !hasCurrentPrompt;
   polishButton.disabled = isLoading || !hasCustomPrompt || !isCustomMode;
   generateCustomButton.disabled = isLoading || !hasCustomPrompt || !isCustomMode;
   customPromptInput.disabled = isLoading || !isCustomMode;
+  if (createFromSvgButton) {
+    createFromSvgButton.disabled = isLoading || !hasPastedSvg || !isPasteMode;
+  }
+  if (pasteSvgInput) {
+    pasteSvgInput.disabled = isLoading || !isPasteMode;
+  }
+  if (pasteLabelInput) {
+    pasteLabelInput.disabled = isLoading || !isPasteMode;
+  }
+  if (openPasteModeButton) {
+    openPasteModeButton.disabled = isLoading;
+  }
   if (modelInput) {
     modelInput.disabled = isLoading;
   }
@@ -371,13 +427,14 @@ function updateSvg(svgText) {
     viewerStageEl.classList.add("has-content");
   }
   if (viewerEmptyEl) {
-    viewerEmptyEl.textContent = "No SVG yet. Select a prompt and generate.";
+    viewerEmptyEl.textContent = EMPTY_VIEWER_MESSAGE;
   }
   setCopySvgFeedback("");
+  setDiscordExportFeedback("");
   refreshControlStates();
 }
 
-function clearSvg(message = "No SVG yet. Select a prompt and generate.") {
+function clearSvg(message = EMPTY_VIEWER_MESSAGE) {
   currentSvgText = "";
   if (currentSvgUrl) {
     URL.revokeObjectURL(currentSvgUrl);
@@ -391,6 +448,7 @@ function clearSvg(message = "No SVG yet. Select a prompt and generate.") {
     viewerEmptyEl.textContent = message;
   }
   setCopySvgFeedback("");
+  setDiscordExportFeedback("");
   refreshControlStates();
 }
 
@@ -447,6 +505,87 @@ async function fetchJson(url, options = {}) {
     throw error;
   }
   return payload;
+}
+
+function getDefaultDiscordExportPresets() {
+  return [
+    { id: "attachment-webp", label: "Chat Attachment (Animated WebP)", sizeLimitBytes: 10 * 1024 * 1024 },
+    { id: "emoji-webp", label: "Server Emoji (Animated WebP)", sizeLimitBytes: 256 * 1024 },
+    { id: "emoji-gif", label: "Server Emoji (GIF)", sizeLimitBytes: 256 * 1024 },
+    { id: "sticker-apng", label: "Sticker (APNG)", sizeLimitBytes: 512 * 1024 },
+  ];
+}
+
+function renderDiscordExportPresetOptions() {
+  if (!discordExportPresetSelect) {
+    return;
+  }
+
+  discordExportPresetSelect.innerHTML = "";
+  for (const preset of discordExportPresets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    discordExportPresetSelect.appendChild(option);
+  }
+}
+
+async function loadDiscordExportPresets() {
+  const fallbackPresets = getDefaultDiscordExportPresets();
+
+  try {
+    const payload = await fetchJson("/api/discord-export/presets");
+    const serverPresets = Array.isArray(payload?.presets) ? payload.presets : [];
+    discordExportPresets = serverPresets.length > 0 ? serverPresets : fallbackPresets;
+  } catch {
+    discordExportPresets = fallbackPresets;
+  }
+
+  renderDiscordExportPresetOptions();
+  refreshControlStates();
+}
+
+function getSelectedDiscordExportPresetId() {
+  const selectedId = String(discordExportPresetSelect?.value || "").trim();
+  if (!selectedId) {
+    return "attachment-webp";
+  }
+  return selectedId;
+}
+
+function bytesToLabel(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) {
+    return "0 B";
+  }
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function base64ToBlob(base64, mimeType) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType || "application/octet-stream" });
+}
+
+function downloadBlob(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 function normalizeFixedPromptIndex(index) {
@@ -751,7 +890,7 @@ function renderLibraryList(payload) {
     empty.className = "library-empty";
     empty.textContent =
       libraryScope === "created"
-        ? "No created SVGs yet. Generate selected, parallel, or custom."
+        ? "No created SVGs yet. Generate selected, parallel, custom, or paste an SVG."
         : "No hidden SVGs.";
     libraryListEl.appendChild(empty);
     carouselIndex = null;
@@ -797,18 +936,44 @@ function renderLibraryList(payload) {
     });
     actionWrap.appendChild(previewButton);
 
-    const moveButton = document.createElement("button");
-    moveButton.type = "button";
-    moveButton.className = "btn btn-ghost btn-mini";
-    moveButton.textContent = item.scope === "created" ? "Hide" : "Unhide";
-    moveButton.addEventListener("click", () => {
-      if (item.scope === "created") {
-        hideLibraryItem(item.name);
-      } else {
-        unhideLibraryItem(item.name);
+    const actionSelect = document.createElement("select");
+    actionSelect.className = "select-input library-action-select";
+    actionSelect.setAttribute("aria-label", `Actions for ${item.name}`);
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Actions";
+    actionSelect.appendChild(defaultOption);
+
+    const moveOption = document.createElement("option");
+    moveOption.value = item.scope === "created" ? "hide" : "unhide";
+    moveOption.textContent = item.scope === "created" ? "Hide" : "Unhide";
+    actionSelect.appendChild(moveOption);
+
+    const deleteOption = document.createElement("option");
+    deleteOption.value = "delete";
+    deleteOption.textContent = "Delete";
+    actionSelect.appendChild(deleteOption);
+
+    actionSelect.addEventListener("change", async () => {
+      const action = actionSelect.value;
+      if (!action) {
+        return;
+      }
+      actionSelect.disabled = true;
+      actionSelect.value = "";
+      if (action === "hide") {
+        await hideLibraryItem(item.name);
+      } else if (action === "unhide") {
+        await unhideLibraryItem(item.name);
+      } else if (action === "delete") {
+        await deleteLibraryItem(item.name, item.scope);
+      }
+      if (libraryListEl.contains(actionSelect)) {
+        actionSelect.disabled = false;
       }
     });
-    actionWrap.appendChild(moveButton);
+    actionWrap.appendChild(actionSelect);
 
     row.appendChild(textWrap);
     row.appendChild(actionWrap);
@@ -832,9 +997,10 @@ async function loadLibrary({ preserveSelection = true } = {}) {
       const hasCurrent = payload.items.some(
         (item) => item.name === currentAssetName && item.scope === currentAssetScope,
       );
-      if (!hasCurrent && payload.scope === "created" && currentAssetScope === "created") {
+      if (!hasCurrent && payload.scope === currentAssetScope) {
         currentAssetName = null;
         currentAssetScope = null;
+        renderMeta();
       }
     }
     renderLibraryList(payload);
@@ -973,6 +1139,32 @@ async function unhideLibraryItem(name) {
     }
     await loadLibrary();
     setStatus(`Unhidden ${name}.`);
+  } catch (error) {
+    setStatus(error.message, { isError: true });
+  }
+}
+
+async function deleteLibraryItem(name, scope) {
+  const activeScope = scope === "archived" ? "archived" : "created";
+  const confirmed = window.confirm(`Delete ${name} from ${activeScope}? This cannot be undone.`);
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setStatus(`Deleting ${name}...`, { isLoadingState: true });
+    await fetchJson("/api/library/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, scope: activeScope }),
+    });
+    if (currentAssetName === name && currentAssetScope === activeScope) {
+      currentAssetName = null;
+      currentAssetScope = null;
+      renderMeta();
+    }
+    await loadLibrary();
+    setStatus(`Deleted ${name}.`);
   } catch (error) {
     setStatus(error.message, { isError: true });
   }
@@ -1203,6 +1395,45 @@ async function generateCustom() {
   }
 }
 
+async function createFromPastedSvg() {
+  if (generationMode !== "paste") {
+    setStatus("Switch to Paste SVG mode to create from pasted markup.", { isError: true });
+    return;
+  }
+
+  const svg = getPastedSvgValue();
+  if (!svg) {
+    setStatus("Paste SVG markup first.", { isError: true });
+    return;
+  }
+
+  try {
+    setLoading(true);
+    clearParallelResults();
+    setStatus("Creating SVG from pasted markup...", { isLoadingState: true });
+    const payload = await fetchJson("/api/create-from-svg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        svg,
+        prompt: getPastedLabelValue(),
+      }),
+    });
+    applyGenerationPayload(payload);
+    if (Array.isArray(payload.preprocessNotes) && payload.preprocessNotes.length > 0) {
+      setPasteMeta(payload.preprocessNotes.join(" "));
+    } else {
+      setPasteMeta("Imported without modifications.");
+    }
+    await loadLibrary();
+    setStatus(currentAssetName ? `Done. Saved ${currentAssetName}.` : "Done.");
+  } catch (error) {
+    setStatus(error.message, { isError: true });
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function polishPrompt() {
   if (generationMode !== "custom") {
     setStatus("Switch to Custom mode to polish a prompt.", { isError: true });
@@ -1308,6 +1539,59 @@ async function copyCurrentSvg() {
   }
 }
 
+async function exportCurrentSvgForDiscord() {
+  if (!currentSvgText) {
+    setStatus("Generate or load an SVG first.", { isError: true });
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setDiscordExportFeedback("");
+    setStatus("Exporting Discord asset...", { isLoadingState: true });
+    const presetId = getSelectedDiscordExportPresetId();
+    const payload = await fetchJson("/api/discord-export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        presetId,
+        sourceName: currentAssetName || "animated-svg.svg",
+        svg: currentSvgText,
+      }),
+    });
+
+    const base64 = payload?.output?.base64;
+    const mimeType = payload?.output?.mimeType;
+    const fileName = payload?.output?.fileName || "discord-export.bin";
+    if (typeof base64 !== "string" || base64.length === 0) {
+      throw new Error("Export completed but no downloadable file was returned.");
+    }
+
+    const blob = base64ToBlob(base64, mimeType);
+    downloadBlob(blob, fileName);
+
+    const bytes = Number(payload?.output?.bytes) || blob.size;
+    const limit = Number(payload?.preset?.sizeLimitBytes) || 0;
+    const withinLimit = payload?.output?.meetsDiscordLimit !== false;
+    const summary = limit > 0 ? `${bytesToLabel(bytes)} / ${bytesToLabel(limit)}` : bytesToLabel(bytes);
+
+    if (withinLimit) {
+      setDiscordExportFeedback(`downloaded (${summary})`);
+      setStatus(`Discord export ready: ${fileName}.`);
+    } else {
+      setDiscordExportFeedback(`downloaded (over limit: ${summary})`, { isError: true });
+      setStatus(payload?.output?.warning || "Export downloaded, but it exceeds Discord size limits.", {
+        isError: true,
+      });
+    }
+  } catch (error) {
+    setDiscordExportFeedback("export failed", { isError: true });
+    setStatus(error.message, { isError: true });
+  } finally {
+    setLoading(false);
+  }
+}
+
 function useCurrentPromptInComposer() {
   if (!currentPrompt) {
     return;
@@ -1341,15 +1625,28 @@ copyButton.addEventListener("click", copyPrompt);
 if (copySvgButton) {
   copySvgButton.addEventListener("click", copyCurrentSvg);
 }
+if (discordExportButton) {
+  discordExportButton.addEventListener("click", exportCurrentSvgForDiscord);
+}
 polishButton.addEventListener("click", polishPrompt);
 generateCustomButton.addEventListener("click", generateCustom);
+if (createFromSvgButton) {
+  createFromSvgButton.addEventListener("click", createFromPastedSvg);
+}
 useCurrentButton.addEventListener("click", useCurrentPromptInComposer);
+if (openPasteModeButton) {
+  openPasteModeButton.addEventListener("click", () => {
+    applyGenerationMode("paste");
+    setStatus("Switched to paste mode. Paste SVG markup and create.");
+  });
+}
 refreshLibraryButton.addEventListener("click", () => loadLibrary());
 showHiddenToggle.addEventListener("change", () => loadLibrary({ preserveSelection: false }));
 if (generationModeSelect) {
   generationModeSelect.addEventListener("change", () => {
     applyGenerationMode(generationModeSelect.value);
-    const label = generationMode === "custom" ? "custom" : "examples";
+    const label =
+      generationMode === "custom" ? "custom" : generationMode === "paste" ? "paste" : "examples";
     setStatus(`Switched to ${label} mode.`);
   });
 }
@@ -1380,6 +1677,12 @@ if (cutModeSelect) {
   });
 }
 if (cutRatioInput) {
+  cutRatioInput.addEventListener("input", () => {
+    applyCutMode();
+  });
+  cutRatioInput.addEventListener("change", () => {
+    applyCutMode();
+  });
   cutRatioInput.addEventListener("blur", () => {
     applyCutMode();
   });
@@ -1416,6 +1719,19 @@ customPromptInput.addEventListener("input", () => {
   refreshControlStates();
 });
 
+if (pasteSvgInput) {
+  pasteSvgInput.addEventListener("input", () => {
+    setPasteMeta("");
+    refreshControlStates();
+  });
+}
+
+if (pasteLabelInput) {
+  pasteLabelInput.addEventListener("input", () => {
+    setPasteMeta("");
+  });
+}
+
 if (modelInput) {
   modelInput.addEventListener("blur", () => {
     if (!String(modelInput.value || "").trim()) {
@@ -1439,6 +1755,17 @@ customPromptInput.addEventListener("keydown", (event) => {
     }
   }
 });
+
+if (pasteSvgInput) {
+  pasteSvgInput.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      if (!createFromSvgButton?.disabled) {
+        createFromPastedSvg();
+      }
+    }
+  });
+}
 
 document.addEventListener("keydown", (event) => {
   if (
@@ -1467,6 +1794,12 @@ document.addEventListener("keydown", (event) => {
       }
       return;
     }
+    if (generationMode === "paste") {
+      if (!createFromSvgButton?.disabled) {
+        createFromPastedSvg();
+      }
+      return;
+    }
     if (!nextButton.disabled) {
       generateSelected();
     }
@@ -1487,4 +1820,7 @@ loadLibrary();
 loadFixedPrompts().catch((error) => {
   setStatus(`Prompt list load failed: ${error.message}`, { isError: true });
   refreshControlStates();
+});
+loadDiscordExportPresets().catch(() => {
+  // Keep UI usable with static preset fallback.
 });

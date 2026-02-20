@@ -12,6 +12,11 @@ const {
   polishSvgPrompt,
 } = require("./lib/gemini");
 const { preprocessSvg } = require("./lib/preprocess");
+const {
+  DISCORD_EXPORT_PRESET_LIST,
+  DiscordExportError,
+  exportDiscordAsset,
+} = require("./lib/discord-export");
 
 const HOST = "127.0.0.1";
 const PORT = parseNumber(process.env.WEB_PORT, 3000);
@@ -332,6 +337,24 @@ async function moveLibrarySvg({ name, fromScope, toScope }) {
   }
 
   return { name: targetName, scope: toScope };
+}
+
+async function deleteLibrarySvg({ name, scope }) {
+  const activeScope = scope === "archived" ? "archived" : "created";
+  const fileName = safeAssetName(name);
+  const directory = activeScope === "archived" ? ARCHIVED_SVGS_DIR : CREATED_SVGS_DIR;
+  await ensureDir(directory);
+  const svgPath = path.join(directory, fileName);
+  const metaPath = metadataPathFor(directory, fileName);
+  await fs.unlink(svgPath);
+  try {
+    await fs.unlink(metaPath);
+  } catch (error) {
+    if (error && error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  return { name: fileName, scope: activeScope };
 }
 
 async function parseBody(request) {
@@ -665,6 +688,10 @@ function readPromptFromBody(body) {
   return typeof body.prompt === "string" ? body.prompt.trim() : "";
 }
 
+function readSvgFromBody(body) {
+  return typeof body.svg === "string" ? body.svg : "";
+}
+
 async function handleGenerate(request, response) {
   const body = await parseBody(request);
   const prompt = readPromptFromBody(body);
@@ -706,6 +733,54 @@ async function handleGenerate(request, response) {
     promptCount,
     promptMode,
     generationConfig,
+  });
+}
+
+async function handleCreateFromSvg(request, response) {
+  const body = await parseBody(request);
+  const rawSvg = readSvgFromBody(body);
+  const prompt = readPromptFromBody(body) || "Imported from pasted SVG";
+
+  if (!rawSvg.trim()) {
+    json(response, 400, { error: "Missing SVG markup." });
+    return;
+  }
+
+  let preprocessed;
+  try {
+    preprocessed = preprocessSvg(rawSvg);
+  } catch (error) {
+    json(response, 422, { error: error.message });
+    return;
+  }
+
+  const savedAsset = await saveGeneratedSvg({
+    svg: preprocessed.svg,
+    prompt,
+    category: "pasted-svg",
+    seed: null,
+    promptIndex: null,
+    promptCount: null,
+    promptMode: "pasted-svg",
+    model: "local-paste",
+    generationConfig: null,
+  });
+
+  json(response, 200, {
+    prompt,
+    category: "pasted-svg",
+    seed: null,
+    promptIndex: null,
+    promptCount: null,
+    promptMode: "pasted-svg",
+    svg: preprocessed.svg,
+    model: "local-paste",
+    finishReason: "imported",
+    usageMetadata: null,
+    generationConfig: null,
+    rawModelResponse: null,
+    preprocessNotes: preprocessed.notes,
+    savedAsset,
   });
 }
 
@@ -760,6 +835,46 @@ async function handlePolishTemplateConfig(response) {
     template: DEFAULT_PROMPT_POLISH_TEMPLATE,
     placeholders: ["{{examples}}", "{{userPrompt}}"],
   });
+}
+
+async function handleDiscordExportPresets(response) {
+  json(response, 200, {
+    presets: DISCORD_EXPORT_PRESET_LIST,
+  });
+}
+
+async function handleDiscordExport(request, response) {
+  const body = await parseBody(request);
+  const presetId = typeof body.presetId === "string" ? body.presetId.trim() : "";
+  const svg = typeof body.svg === "string" ? body.svg : "";
+  const sourceName = typeof body.sourceName === "string" ? body.sourceName : "discord-export.svg";
+
+  if (!svg.trim()) {
+    json(response, 400, { error: "Missing SVG markup." });
+    return;
+  }
+
+  try {
+    const result = await exportDiscordAsset({
+      svg,
+      presetId,
+      sourceName,
+    });
+    const { buffer, ...outputWithoutBuffer } = result.output;
+    json(response, 200, {
+      preset: result.preset,
+      output: {
+        ...outputWithoutBuffer,
+        base64: buffer.toString("base64"),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DiscordExportError) {
+      json(response, error.statusCode || 422, { error: error.message });
+      return;
+    }
+    throw error;
+  }
 }
 
 async function handleSavePrompt(request, response) {
@@ -889,6 +1004,26 @@ async function handleUnhideLibrarySvg(request, response) {
   }
 }
 
+async function handleDeleteLibrarySvg(request, response) {
+  const body = await parseBody(request);
+  const name = body.name;
+  const scope = body.scope === "archived" ? "archived" : "created";
+  if (!name) {
+    json(response, 400, { error: "Missing name." });
+    return;
+  }
+  try {
+    const deleted = await deleteLibrarySvg({ name, scope });
+    json(response, 200, { ok: true, deleted });
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      json(response, 404, { error: "SVG not found." });
+      return;
+    }
+    throw error;
+  }
+}
+
 async function route(request, response) {
   const url = new URL(request.url || "/", `http://${HOST}:${PORT}`);
 
@@ -917,6 +1052,11 @@ async function route(request, response) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/create-from-svg") {
+    await handleCreateFromSvg(request, response);
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/polish-prompt") {
     await handlePolishPrompt(request, response);
     return;
@@ -924,6 +1064,16 @@ async function route(request, response) {
 
   if (request.method === "GET" && url.pathname === "/api/polish-template") {
     await handlePolishTemplateConfig(response);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/discord-export/presets") {
+    await handleDiscordExportPresets(response);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/discord-export") {
+    await handleDiscordExport(request, response);
     return;
   }
 
@@ -949,6 +1099,11 @@ async function route(request, response) {
 
   if (request.method === "POST" && url.pathname === "/api/library/unhide") {
     await handleUnhideLibrarySvg(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/library/delete") {
+    await handleDeleteLibrarySvg(request, response);
     return;
   }
 

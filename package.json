@@ -12,7 +12,7 @@
     "iterate": "node src/cli.js iterate",
     "dashboard": "node src/cli.js dashboard",
     "view": "node src/cli.js view",
-    "test:e2e": "node --test test/e2e.test.js test/web-seed.test.js test/preprocess.test.js test/gemini-polish-template.test.js",
+    "test:e2e": "node --test test/e2e.test.js test/web-seed.test.js test/web-paste-import.test.js test/preprocess.test.js test/gemini-polish-template.test.js test/discord-export.test.js",
     "probe:gemini": "node scripts/probe-gemini-response.js"
   },
   "keywords": [],
@@ -22,6 +22,7 @@
   "dependencies": {
     "@google/genai": "^1.42.0",
     "dotenv": "^17.3.1",
-    "fast-xml-parser": "^5.3.6"
+    "fast-xml-parser": "^5.3.6",
+    "puppeteer-core": "^24.37.5"
   }
 }

@@ -1,3 +1,4 @@
+const gridPageEl = document.querySelector(".grid-page");
 const gridEl = document.getElementById("svg-grid");
 const statusEl = document.getElementById("grid-status");
 const metaEl = document.getElementById("grid-meta");
@@ -6,8 +7,32 @@ const includeHiddenToggle = document.getElementById("include-hidden-toggle");
 const cutModeSelect = document.getElementById("grid-cut-mode-select");
 const cutRatioInput = document.getElementById("grid-cut-ratio-input");
 const themeSelect = document.getElementById("grid-theme-select");
+
+const detailPanelEl = document.getElementById("svg-detail-panel");
+const detailTitleEl = document.getElementById("detail-title");
+const detailSubEl = document.getElementById("detail-sub");
+const detailBackButton = document.getElementById("detail-back-btn");
+const detailCopyButton = document.getElementById("detail-copy-btn");
+const detailDownloadLink = document.getElementById("detail-download-link");
+const detailRawLink = document.getElementById("detail-raw-link");
+const detailCopyFeedbackEl = document.getElementById("detail-copy-feedback");
+const detailViewerStageEl = document.getElementById("detail-viewer-stage");
+const detailViewerEl = document.getElementById("detail-viewer");
+const detailEmptyEl = document.getElementById("detail-empty");
+
 const ALLOWED_CUT_MODES = new Set(["original", "square", "circle", "ratio"]);
+const ALLOWED_SCOPES = new Set(["created", "archived"]);
 const THEME_STORAGE_KEY = "animated-svgs-theme";
+
+let allLibraryItems = [];
+let gridSummary = {
+  visibleCount: 0,
+  createdCount: 0,
+  archivedCount: 0,
+  includeHidden: false,
+};
+let currentDetail = null;
+let detailRequestToken = 0;
 
 function setStatus(message, { isError = false } = {}) {
   statusEl.textContent = message;
@@ -96,31 +121,42 @@ function normalizeCutMode(rawMode) {
   return mode;
 }
 
-function applyGridCutMode() {
-  if (!gridEl) {
+function normalizeScope(rawScope) {
+  const scope = String(rawScope || "created").toLowerCase();
+  if (!ALLOWED_SCOPES.has(scope)) {
+    return "created";
+  }
+  return scope;
+}
+
+function applyCutClass(targetEl, mode, ratio) {
+  if (!targetEl) {
     return;
   }
-  const mode = normalizeCutMode(cutModeSelect?.value);
-  gridEl.classList.remove("cut-mode-square", "cut-mode-circle", "cut-mode-ratio");
-  if (mode === "square") {
-    gridEl.classList.add("cut-mode-square");
-  } else if (mode === "circle") {
-    gridEl.classList.add("cut-mode-circle");
-  } else if (mode === "ratio") {
-    const parsed = parseRatioValue(cutRatioInput?.value || "");
-    gridEl.classList.add("cut-mode-ratio");
-    gridEl.style.setProperty("--grid-cut-ratio", String(parsed || 16 / 9));
-  }
+  targetEl.classList.remove("cut-mode-square", "cut-mode-circle", "cut-mode-ratio");
 
-  if (cutRatioInput) {
-    cutRatioInput.disabled = mode !== "ratio";
+  if (mode === "square") {
+    targetEl.classList.add("cut-mode-square");
+  } else if (mode === "circle") {
+    targetEl.classList.add("cut-mode-circle");
+  } else if (mode === "ratio") {
+    targetEl.classList.add("cut-mode-ratio");
+    targetEl.style.setProperty("--grid-cut-ratio", String(ratio || 16 / 9));
   }
+}
+
+function applyGridCutMode() {
+  const mode = normalizeCutMode(cutModeSelect?.value);
+  const ratio = parseRatioValue(cutRatioInput?.value || "");
+  applyCutClass(gridEl, mode, ratio);
+  applyCutClass(detailViewerStageEl, mode, ratio);
 }
 
 function applyCutSettingsFromUrl() {
   const url = new URL(window.location.href);
   const mode = normalizeCutMode(url.searchParams.get("cut"));
   const ratio = String(url.searchParams.get("ratio") || "").trim();
+
   if (cutModeSelect) {
     cutModeSelect.value = mode;
   }
@@ -129,7 +165,24 @@ function applyCutSettingsFromUrl() {
   }
 }
 
-function syncCutSettingsToUrl() {
+function getDetailFromUrl() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("view") !== "detail") {
+    return null;
+  }
+
+  const name = String(url.searchParams.get("name") || "").trim();
+  if (!name) {
+    return null;
+  }
+
+  return {
+    scope: normalizeScope(url.searchParams.get("scope")),
+    name,
+  };
+}
+
+function syncUrlState({ push = false } = {}) {
   const url = new URL(window.location.href);
   const mode = normalizeCutMode(cutModeSelect?.value);
   const ratioText = String(cutRatioInput?.value || "").trim();
@@ -146,7 +199,22 @@ function syncCutSettingsToUrl() {
     }
   }
 
-  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  if (currentDetail) {
+    url.searchParams.set("view", "detail");
+    url.searchParams.set("scope", currentDetail.scope);
+    url.searchParams.set("name", currentDetail.name);
+  } else {
+    url.searchParams.delete("view");
+    url.searchParams.delete("scope");
+    url.searchParams.delete("name");
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  if (push) {
+    window.history.pushState({}, "", nextUrl);
+    return;
+  }
+  window.history.replaceState({}, "", nextUrl);
 }
 
 function createGenerateLink(label) {
@@ -199,6 +267,94 @@ function createGenerateCard() {
   return card;
 }
 
+function setDetailVisibility(show) {
+  if (detailPanelEl) {
+    detailPanelEl.hidden = !show;
+  }
+  if (gridPageEl) {
+    gridPageEl.classList.toggle("detail-open", show);
+  }
+}
+
+function setDetailCopyFeedback(message, { isError = false } = {}) {
+  if (!detailCopyFeedbackEl) {
+    return;
+  }
+  detailCopyFeedbackEl.textContent = message;
+  detailCopyFeedbackEl.classList.toggle("error", isError);
+}
+
+function setGridSummary(createdCount, archivedCount, includeHidden) {
+  const visibleCount = includeHidden ? createdCount + archivedCount : createdCount;
+  gridSummary = {
+    visibleCount,
+    createdCount,
+    archivedCount,
+    includeHidden,
+  };
+
+  metaEl.textContent = includeHidden
+    ? `${visibleCount} total (${createdCount} created, ${archivedCount} hidden)`
+    : `${visibleCount} created (${archivedCount} hidden not shown)`;
+}
+
+function renderGridStatus() {
+  const { visibleCount, includeHidden } = gridSummary;
+  if (visibleCount === 0) {
+    setStatus("No SVGs yet. Use + Generate SVG to create your first one.");
+    return;
+  }
+  if (currentDetail) {
+    setStatus(`Viewing ${currentDetail.name}.`);
+    return;
+  }
+  const suffix = includeHidden ? " (including hidden)" : "";
+  setStatus(`Loaded ${visibleCount} SVG${visibleCount === 1 ? "" : "s"}${suffix}.`);
+}
+
+function clearDetailUi() {
+  if (detailTitleEl) {
+    detailTitleEl.textContent = "Selected SVG";
+  }
+  if (detailSubEl) {
+    detailSubEl.textContent = "Open an item from the grid to inspect it here.";
+  }
+  if (detailViewerEl) {
+    detailViewerEl.removeAttribute("data");
+  }
+  if (detailViewerStageEl) {
+    detailViewerStageEl.classList.remove("has-content");
+  }
+  if (detailEmptyEl) {
+    detailEmptyEl.textContent = "Loading SVG preview...";
+  }
+  if (detailCopyButton) {
+    detailCopyButton.disabled = true;
+  }
+  if (detailDownloadLink) {
+    detailDownloadLink.href = "#";
+    detailDownloadLink.removeAttribute("download");
+  }
+  if (detailRawLink) {
+    detailRawLink.href = "#";
+  }
+  setDetailCopyFeedback("");
+}
+
+function closeDetail({ syncUrl = true, pushUrl = false, preserveStatus = false } = {}) {
+  currentDetail = null;
+  detailRequestToken += 1;
+  clearDetailUi();
+  setDetailVisibility(false);
+  if (syncUrl) {
+    syncUrlState({ push: pushUrl });
+  }
+  renderGrid(allLibraryItems);
+  if (!preserveStatus) {
+    renderGridStatus();
+  }
+}
+
 function renderGrid(items) {
   gridEl.innerHTML = "";
   if (!items.length) {
@@ -228,6 +384,9 @@ function renderGrid(items) {
   for (const item of items) {
     const card = document.createElement("article");
     card.className = "card";
+    if (currentDetail && currentDetail.name === item.name && currentDetail.scope === item.scope) {
+      card.classList.add("selected");
+    }
 
     const preview = document.createElement("img");
     preview.className = "card-preview";
@@ -249,14 +408,26 @@ function renderGrid(items) {
     const actions = document.createElement("div");
     actions.className = "card-actions";
 
-    const openButton = document.createElement("a");
+    const openButton = document.createElement("button");
+    openButton.type = "button";
     openButton.className = "btn btn-secondary";
-    openButton.target = "_blank";
-    openButton.rel = "noopener noreferrer";
-    openButton.href = `/api/library/file?scope=${encodeURIComponent(item.scope)}&name=${encodeURIComponent(item.name)}`;
-    openButton.textContent = "Open SVG";
+    openButton.textContent = "Open in Page";
+    openButton.addEventListener("click", () => {
+      openDetail({
+        scope: item.scope,
+        name: item.name,
+      });
+    });
+
+    const rawLink = document.createElement("a");
+    rawLink.className = "btn btn-ghost";
+    rawLink.target = "_blank";
+    rawLink.rel = "noopener noreferrer";
+    rawLink.href = `/api/library/file?scope=${encodeURIComponent(item.scope)}&name=${encodeURIComponent(item.name)}`;
+    rawLink.textContent = "Raw";
 
     actions.appendChild(openButton);
+    actions.appendChild(rawLink);
     body.appendChild(title);
     body.appendChild(sub);
     body.appendChild(actions);
@@ -276,9 +447,6 @@ async function loadGrid() {
     if (cutModeSelect) {
       cutModeSelect.disabled = true;
     }
-    if (cutRatioInput) {
-      cutRatioInput.disabled = true;
-    }
 
     const [createdPayload, archivedPayload] = await Promise.all([
       fetchJson("/api/library?scope=created"),
@@ -286,22 +454,15 @@ async function loadGrid() {
     ]);
 
     const includeHidden = includeHiddenToggle.checked;
-    const allItems = includeHidden
+    allLibraryItems = includeHidden
       ? [...createdPayload.items, ...archivedPayload.items]
       : [...createdPayload.items];
 
-    allItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
-    renderGrid(allItems);
+    allLibraryItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    renderGrid(allLibraryItems);
     applyGridCutMode();
-    metaEl.textContent = includeHidden
-      ? `${allItems.length} total (${createdPayload.items.length} created, ${archivedPayload.items.length} hidden)`
-      : `${allItems.length} created (${archivedPayload.items.length} hidden not shown)`;
-    if (allItems.length === 0) {
-      setStatus("No SVGs yet. Use + Generate SVG to create your first one.");
-    } else {
-      setStatus(`Loaded ${allItems.length} SVG${allItems.length === 1 ? "" : "s"}.`);
-    }
+    setGridSummary(createdPayload.items.length, archivedPayload.items.length, includeHidden);
+    renderGridStatus();
   } catch (error) {
     setStatus(error.message, { isError: true });
     metaEl.textContent = "";
@@ -315,20 +476,171 @@ async function loadGrid() {
   }
 }
 
+async function openDetail({ scope, name, syncUrl = true, pushUrl = true } = {}) {
+  const fileName = String(name || "").trim();
+  if (!fileName) {
+    return;
+  }
+
+  const activeScope = normalizeScope(scope);
+  const token = detailRequestToken + 1;
+  detailRequestToken = token;
+  setDetailVisibility(true);
+  setDetailCopyFeedback("");
+
+  if (detailTitleEl) {
+    detailTitleEl.textContent = fileName;
+  }
+  if (detailSubEl) {
+    detailSubEl.textContent = `${activeScope} | Loading details...`;
+  }
+  if (detailEmptyEl) {
+    detailEmptyEl.textContent = "Loading SVG preview...";
+  }
+  if (detailViewerStageEl) {
+    detailViewerStageEl.classList.remove("has-content");
+  }
+  if (detailCopyButton) {
+    detailCopyButton.disabled = true;
+  }
+  if (detailDownloadLink) {
+    detailDownloadLink.href = "#";
+    detailDownloadLink.removeAttribute("download");
+  }
+  if (detailRawLink) {
+    detailRawLink.href = "#";
+  }
+
+  try {
+    const payload = await fetchJson(
+      `/api/library/item?scope=${encodeURIComponent(activeScope)}&name=${encodeURIComponent(fileName)}`,
+    );
+    if (token !== detailRequestToken) {
+      return;
+    }
+
+    const fileUrl = `/api/library/file?scope=${encodeURIComponent(payload.scope)}&name=${encodeURIComponent(payload.name)}`;
+    currentDetail = {
+      scope: normalizeScope(payload.scope),
+      name: payload.name,
+      svg: typeof payload.svg === "string" ? payload.svg : "",
+      prompt: payload.meta?.prompt || "",
+      createdAt: payload.meta?.createdAt || null,
+      url: fileUrl,
+    };
+
+    if (detailTitleEl) {
+      detailTitleEl.textContent = compact(currentDetail.prompt, 120) || currentDetail.name;
+    }
+    if (detailSubEl) {
+      detailSubEl.textContent = [
+        currentDetail.name,
+        formatDateTime(currentDetail.createdAt),
+        currentDetail.scope,
+      ].join(" | ");
+    }
+    if (detailViewerEl) {
+      detailViewerEl.data = currentDetail.url;
+    }
+    if (detailViewerStageEl) {
+      detailViewerStageEl.classList.add("has-content");
+    }
+    if (detailDownloadLink) {
+      detailDownloadLink.href = currentDetail.url;
+      detailDownloadLink.download = currentDetail.name;
+    }
+    if (detailRawLink) {
+      detailRawLink.href = currentDetail.url;
+    }
+    if (detailCopyButton) {
+      detailCopyButton.disabled = !currentDetail.svg;
+    }
+    applyGridCutMode();
+    renderGrid(allLibraryItems);
+    renderGridStatus();
+
+    if (syncUrl) {
+      syncUrlState({ push: pushUrl });
+    }
+  } catch (error) {
+    if (token !== detailRequestToken) {
+      return;
+    }
+    setStatus(error.message, { isError: true });
+    closeDetail({ syncUrl, pushUrl: false, preserveStatus: true });
+  }
+}
+
+function copyTextFallback(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "readonly");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  return ok;
+}
+
+async function copyCurrentSvg() {
+  if (!currentDetail || !currentDetail.svg) {
+    return;
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(currentDetail.svg);
+    } else if (!copyTextFallback(currentDetail.svg)) {
+      throw new Error("Copy failed in this browser.");
+    }
+    setDetailCopyFeedback("SVG markup copied.");
+  } catch (error) {
+    setDetailCopyFeedback(error.message || "Unable to copy SVG.", { isError: true });
+  }
+}
+
+async function applyDetailStateFromUrl() {
+  const detailState = getDetailFromUrl();
+  if (!detailState) {
+    closeDetail({ syncUrl: false });
+    return;
+  }
+  await openDetail({
+    scope: detailState.scope,
+    name: detailState.name,
+    syncUrl: false,
+    pushUrl: false,
+  });
+}
+
 refreshButton.addEventListener("click", loadGrid);
 includeHiddenToggle.addEventListener("change", loadGrid);
+
 if (cutModeSelect) {
   cutModeSelect.addEventListener("change", () => {
     applyGridCutMode();
-    syncCutSettingsToUrl();
+    syncUrlState();
   });
 }
+
 if (cutRatioInput) {
+  cutRatioInput.addEventListener("input", () => {
+    applyGridCutMode();
+    syncUrlState();
+  });
+  cutRatioInput.addEventListener("change", () => {
+    applyGridCutMode();
+    syncUrlState();
+  });
   cutRatioInput.addEventListener("blur", () => {
     applyGridCutMode();
-    syncCutSettingsToUrl();
+    syncUrlState();
   });
 }
+
 if (themeSelect) {
   themeSelect.addEventListener("change", () => {
     const theme = normalizeTheme(themeSelect.value);
@@ -341,7 +653,26 @@ if (themeSelect) {
   });
 }
 
+if (detailBackButton) {
+  detailBackButton.addEventListener("click", () => {
+    closeDetail({ syncUrl: true, pushUrl: true });
+  });
+}
+
+if (detailCopyButton) {
+  detailCopyButton.addEventListener("click", copyCurrentSvg);
+}
+
+window.addEventListener("popstate", () => {
+  applyCutSettingsFromUrl();
+  applyGridCutMode();
+  applyDetailStateFromUrl();
+});
+
 loadThemePreference();
 applyCutSettingsFromUrl();
 applyGridCutMode();
-loadGrid();
+
+loadGrid().then(() => {
+  applyDetailStateFromUrl();
+});
