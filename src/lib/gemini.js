@@ -243,7 +243,7 @@ async function polishSvgPrompt({ apiKey, model, userPrompt, examples = [] }) {
     responseMimeType: "text/plain",
     systemInstruction: PROMPT_POLISH_SYSTEM_INSTRUCTION,
     temperature: 0.4,
-    maxOutputTokens: 512,
+    maxOutputTokens: 2048,
   };
 
   if (isGemini3Model) {
