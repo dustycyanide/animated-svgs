@@ -33,6 +33,44 @@ const PROMPT_POLISH_SYSTEM_INSTRUCTION = [
   "Return plain text only with no markdown, no bullets, no labels, and no surrounding quotes.",
 ].join(" ");
 
+const DEFAULT_PROMPT_POLISH_TEMPLATE = [
+  "Rewrite the following user idea into one polished prompt for animated SVG generation.",
+  "Match the tone and structure of the style examples while keeping the same concept.",
+  "Keep the rewritten prompt imaginative and open-ended by default: preserve the core subject and key motion/theme, but avoid specifying colors or exact theme/style details unless the user explicitly requests that level of detail.",
+  "",
+  "Style examples:",
+  "{{examples}}",
+  "",
+  "User idea:",
+  "{{userPrompt}}",
+  "",
+  "Return only the rewritten prompt.",
+].join("\n");
+
+function buildPromptPolishContents({ promptTemplate, formattedExamples, userPrompt }) {
+  const normalizedUserPrompt = String(userPrompt || "").trim();
+  const normalizedTemplate =
+    typeof promptTemplate === "string" && promptTemplate.trim().length > 0
+      ? promptTemplate.trim()
+      : DEFAULT_PROMPT_POLISH_TEMPLATE;
+
+  const hasExamplesToken = /\{\{\s*examples\s*\}\}/i.test(normalizedTemplate);
+  const hasUserPromptToken = /\{\{\s*userPrompt\s*\}\}/i.test(normalizedTemplate);
+
+  let contents = normalizedTemplate
+    .replace(/\{\{\s*examples\s*\}\}/gi, formattedExamples)
+    .replace(/\{\{\s*userPrompt\s*\}\}/gi, normalizedUserPrompt);
+
+  if (!hasExamplesToken) {
+    contents = `${contents}\n\nStyle examples:\n${formattedExamples}`;
+  }
+  if (!hasUserPromptToken) {
+    contents = `${contents}\n\nUser idea:\n${normalizedUserPrompt}`;
+  }
+
+  return contents;
+}
+
 function nextResultDir(kind) {
   resultSequence += 1;
   const sequence = String(resultSequence).padStart(3, "0");
@@ -220,6 +258,7 @@ async function polishSvgPrompt({
   model,
   userPrompt,
   examples = [],
+  promptTemplate = null,
   maxOutputTokens = null,
   thinkingLevel = "low",
 }) {
@@ -234,19 +273,11 @@ async function polishSvgPrompt({
       ? cleanedExamples.map((item, index) => `${index + 1}. ${item}`).join("\n")
       : "No examples provided.";
 
-  const contents = [
-    "Rewrite the following user idea into one polished prompt for animated SVG generation.",
-    "Match the tone and structure of the style examples while keeping the same concept.",
-    "Keep the rewritten prompt imaginative and open-ended by default: preserve the core subject and key motion/theme, but avoid specifying colors or exact theme/style details unless the user explicitly requests that level of detail.",
-    "",
-    "Style examples:",
+  const contents = buildPromptPolishContents({
+    promptTemplate,
     formattedExamples,
-    "",
-    "User idea:",
-    String(userPrompt || "").trim(),
-    "",
-    "Return only the rewritten prompt.",
-  ].join("\n");
+    userPrompt,
+  });
 
   const isGemini3Model = /^gemini-3/i.test(String(model));
   const config = {
@@ -397,6 +428,8 @@ async function generateAnimatedSvg({
 }
 
 module.exports = {
+  DEFAULT_PROMPT_POLISH_TEMPLATE,
+  buildPromptPolishContents,
   expandMadlibPrompt,
   generateAnimatedSvg,
   polishSvgPrompt,

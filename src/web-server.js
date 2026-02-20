@@ -5,7 +5,12 @@ const { loadEnv, findGeminiKey, resolveGeminiModel, DEFAULT_GEMINI_MODEL } = req
 const { ensureDir, parseNumber, slugify, timestampId } = require("./lib/utils");
 const { buildMadlibSeed, buildMadlibText } = require("./lib/madlib");
 const { FIXED_WEB_PROMPTS, getNextFixedPrompt, listFixedPrompts } = require("./lib/web-prompts");
-const { expandMadlibPrompt, generateAnimatedSvg, polishSvgPrompt } = require("./lib/gemini");
+const {
+  DEFAULT_PROMPT_POLISH_TEMPLATE,
+  expandMadlibPrompt,
+  generateAnimatedSvg,
+  polishSvgPrompt,
+} = require("./lib/gemini");
 const { preprocessSvg } = require("./lib/preprocess");
 
 const HOST = "127.0.0.1";
@@ -391,6 +396,17 @@ function readGenerationConfigFromBody(body) {
   };
 }
 
+function readPolishPromptTemplateFromBody(body) {
+  if (typeof body?.polishPromptTemplate !== "string") {
+    return null;
+  }
+  const template = body.polishPromptTemplate.trim();
+  if (!template) {
+    return null;
+  }
+  return template;
+}
+
 async function serveStatic(urlPath, response) {
   let cleanPath = urlPath;
   if (cleanPath === "/") {
@@ -698,6 +714,7 @@ async function handlePolishPrompt(request, response) {
   const prompt = readPromptFromBody(body);
   const model = resolveWebPolishModel(readModelFromBody(body));
   const generationConfig = readGenerationConfigFromBody(body);
+  const polishPromptTemplate = readPolishPromptTemplateFromBody(body);
   const maxOutputTokens = readPositiveInteger(generationConfig.maxOutputTokens);
   const thinkingLevel = normalizeThinkingLevel(generationConfig.thinkingLevel);
   if (!prompt) {
@@ -720,6 +737,7 @@ async function handlePolishPrompt(request, response) {
     model,
     userPrompt: prompt,
     examples: FIXED_WEB_PROMPTS,
+    promptTemplate: polishPromptTemplate,
     maxOutputTokens,
     thinkingLevel,
   });
@@ -729,10 +747,18 @@ async function handlePolishPrompt(request, response) {
     prompt: polished.prompt,
     model: polished.modelVersion,
     exampleCount: FIXED_WEB_PROMPTS.length,
+    usedCustomTemplate: Boolean(polishPromptTemplate),
     generationConfig: {
       maxOutputTokens,
       thinkingLevel,
     },
+  });
+}
+
+async function handlePolishTemplateConfig(response) {
+  json(response, 200, {
+    template: DEFAULT_PROMPT_POLISH_TEMPLATE,
+    placeholders: ["{{examples}}", "{{userPrompt}}"],
   });
 }
 
@@ -893,6 +919,11 @@ async function route(request, response) {
 
   if (request.method === "POST" && url.pathname === "/api/polish-prompt") {
     await handlePolishPrompt(request, response);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/polish-template") {
+    await handlePolishTemplateConfig(response);
     return;
   }
 

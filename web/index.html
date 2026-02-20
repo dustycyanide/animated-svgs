@@ -114,6 +114,23 @@
                     </select>
                   </label>
                 </div>
+                <div class="advanced-polish-control">
+                  <label for="polish-template-input">Polish Prompt Template</label>
+                  <textarea
+                    id="polish-template-input"
+                    class="advanced-textarea"
+                    spellcheck="false"
+                    placeholder="Loading default template..."
+                  ></textarea>
+                  <div class="advanced-polish-actions">
+                    <button id="reset-polish-template-btn" class="btn btn-ghost btn-mini" type="button">
+                      Reset Template
+                    </button>
+                    <p class="hint">
+                      Supports optional placeholders: <code>{{examples}}</code> and <code>{{userPrompt}}</code>.
+                    </p>
+                  </div>
+                </div>
               </div>
             </details>
             <div class="actions shared-generation-actions">

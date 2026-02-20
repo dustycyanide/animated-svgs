@@ -12,6 +12,8 @@ const useCurrentButton = document.getElementById("use-current-btn");
 const modelInput = document.getElementById("model-input");
 const maxTokensInput = document.getElementById("max-tokens-input");
 const reasoningLevelSelect = document.getElementById("reasoning-level-select");
+const polishTemplateInput = document.getElementById("polish-template-input");
+const resetPolishTemplateButton = document.getElementById("reset-polish-template-btn");
 const refreshLibraryButton = document.getElementById("refresh-library-btn");
 const showHiddenToggle = document.getElementById("show-hidden-toggle");
 const customPromptInput = document.getElementById("custom-prompt-input");
@@ -65,6 +67,8 @@ const ALLOWED_REASONING_LEVELS = new Set(["off", "low", "medium", "high"]);
 const ALLOWED_CUT_MODES = new Set(["original", "square", "circle", "ratio"]);
 const ALLOWED_GENERATION_MODES = new Set(["examples", "custom"]);
 const THEME_STORAGE_KEY = "animated-svgs-theme";
+const POLISH_TEMPLATE_PLACEHOLDERS = "{{examples}}, {{userPrompt}}";
+let defaultPolishPromptTemplate = "";
 
 let libraryScope = "created";
 let libraryItems = [];
@@ -131,6 +135,50 @@ function getGenerationConfig() {
     maxOutputTokens: getMaxOutputTokens(),
     thinkingLevel: getThinkingLevel(),
   };
+}
+
+function getPolishPromptTemplate() {
+  if (!polishTemplateInput) {
+    return null;
+  }
+  const value = String(polishTemplateInput.value || "").trim();
+  if (!value) {
+    return null;
+  }
+  if (defaultPolishPromptTemplate && value === defaultPolishPromptTemplate) {
+    return null;
+  }
+  return value;
+}
+
+function resetPolishTemplate() {
+  if (!polishTemplateInput) {
+    return;
+  }
+  polishTemplateInput.value = defaultPolishPromptTemplate || "";
+}
+
+async function loadPolishTemplateConfig() {
+  if (!polishTemplateInput) {
+    return;
+  }
+
+  try {
+    const payload = await fetchJson("/api/polish-template");
+    const template = typeof payload?.template === "string" ? payload.template.trim() : "";
+    const placeholders = Array.isArray(payload?.placeholders)
+      ? payload.placeholders.join(", ")
+      : POLISH_TEMPLATE_PLACEHOLDERS;
+    defaultPolishPromptTemplate = template;
+    if (!String(polishTemplateInput.value || "").trim()) {
+      polishTemplateInput.value = template;
+    }
+    polishTemplateInput.placeholder = `Use ${placeholders}`;
+  } catch {
+    polishTemplateInput.placeholder = `Use ${POLISH_TEMPLATE_PLACEHOLDERS}`;
+  }
+
+  refreshControlStates();
 }
 
 function normalizeGenerationMode(rawMode) {
@@ -267,6 +315,12 @@ function refreshControlStates() {
   }
   if (reasoningLevelSelect) {
     reasoningLevelSelect.disabled = isLoading;
+  }
+  if (polishTemplateInput) {
+    polishTemplateInput.disabled = isLoading;
+  }
+  if (resetPolishTemplateButton) {
+    resetPolishTemplateButton.disabled = isLoading || !defaultPolishPromptTemplate;
   }
 
   refreshLibraryButton.disabled = isLibraryLoading;
@@ -1170,12 +1224,22 @@ async function polishPrompt() {
       body: JSON.stringify(withGenerationConfig({
         prompt,
         model: getSelectedModel(),
+        polishPromptTemplate: getPolishPromptTemplate(),
       })),
     });
     customPromptInput.value = payload.prompt || prompt;
     composePromptMode = "custom-polished";
-    setCustomMeta(`Polished with ${payload.model}.`);
-    setStatus("Prompt polished. Generate custom when ready.");
+    const usedCustomTemplate = Boolean(payload.usedCustomTemplate);
+    setCustomMeta(
+      usedCustomTemplate
+        ? `Polished with ${payload.model} using custom template.`
+        : `Polished with ${payload.model}.`,
+    );
+    setStatus(
+      usedCustomTemplate
+        ? "Prompt polished with custom template. Generate custom when ready."
+        : "Prompt polished. Generate custom when ready.",
+    );
   } catch (error) {
     setStatus(error.message, { isError: true });
   } finally {
@@ -1360,6 +1424,12 @@ if (modelInput) {
     renderModelMeta({ model: getSelectedModel(), generationConfig: getGenerationConfig() });
   });
 }
+if (resetPolishTemplateButton) {
+  resetPolishTemplateButton.addEventListener("click", () => {
+    resetPolishTemplate();
+    setStatus("Polish template reset to default.");
+  });
+}
 
 customPromptInput.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -1410,6 +1480,9 @@ applyCutMode();
 renderParallelResults();
 renderCarouselControls();
 renderModelMeta({ model: getSelectedModel(), generationConfig: currentGenerationConfig });
+loadPolishTemplateConfig().catch(() => {
+  // Keep UI usable even when config fetch fails.
+});
 loadLibrary();
 loadFixedPrompts().catch((error) => {
   setStatus(`Prompt list load failed: ${error.message}`, { isError: true });
